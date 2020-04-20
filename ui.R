@@ -28,6 +28,7 @@ shinyUI(fluidPage(
                                selected = "fastaFile",
                                width = "70%"),
                    uiOutput("secondaryDB"),
+                   uiOutput("tertiaryDB"),
                    fileInput("moduleFile", 
                              label = h4("moduleFile")),
                    fileInput("pdbID", 
@@ -58,10 +59,10 @@ shinyUI(fluidPage(
                
                wellPanel(#style = "background: #7DC95E",
                    h3("Server Information"),
-                   img(src="gcp.png", height= "100px"),
                    helpText("This area contains parameter that enable \
-                         connection to Google Cloud Platform or alternate \
-                         server"),
+                         connections either to GCP instance or a users \
+                         local server (eg Wynton)"),
+                   img(src="gcp.png", height= "100px"),
                    
                    tabsetPanel(type = "tabs",
                                tabPanel("Connection",
@@ -70,9 +71,18 @@ shinyUI(fluidPage(
                                                    actionButton("instances", "View",
                                                                 width = "100px"),
                                                    actionButton("connect", "Connect",
-                                                                width = "100px")
+                                                                width = "100px"),
+                                                   actionButton("startVM", "Start VM",
+                                                                width = "100px"),
+                                                   actionButton("stopVM", "Stop VM",
+                                                                width = "100px"),
+                                                   actionButton("deleteVM", "Delete VM",
+                                                                width = "100px"),
+                                                   selectInput("instanceNo", h4("VM ID"),
+                                                               choices = c(""),
+                                                             width = "100px")
                                             ),
-                                            column(9, h4("Project"),
+                                            column(9, h4("GCP Project Name"),
                                                    verbatimTextOutput("projectStatus"),
                                                    h4("Instances"),
                                                    tableOutput("instanceTable")
@@ -180,6 +190,7 @@ shinyUI(fluidPage(
                                            style="color: #fff; 
                                 background-color: #337ab7; 
                                 border-color: #2e6da4,"),
+                              br(),
                               htmlOutput("consoleOutput")
                           )
                       )

@@ -4,7 +4,14 @@ library(shiny)
 #source("touchstone.R")
 # source("helperFunctions.R")
 
-# Define server logic required to draw a histogram
+consoleFile <- "gceRunOutput.txt"
+demoScriptLocation <- "bash ./runDemo.sh"
+
+if (file.exists(consoleFile)) {
+    system2("rm", consoleFile)
+    system2("touch", consoleFile)
+}
+
 shinyServer(function(input, output, server, session) {
     options(shiny.maxRequestSize=1000*1024^2)
     output$ms1fileName <- renderTable({ input$ms1peakFile[, 1:2] })
@@ -19,20 +26,37 @@ shinyServer(function(input, output, server, session) {
             return()
         switch(input$databaseType,
                "UniProtKB" = selectInput("species", h4("Species Code"),
-                                         choices = c("HUMAN", "MOUSE", "YEAST",
-                                                     "ECOLI", "etc"),
-                                         width = "70%"),
+                                          choices = c("HUMAN", "MOUSE", "YEAST",
+                                                      "ECOLI", "etc"),
+                                          width = "70%"),
                "SwissProt" = selectInput("species", h4("Species Code"),
-                                         choices = c("HUMAN", "MOUSE", "YEAST",
-                                                     "ECOLI", "etc"),
-                                         width = "70%"),
+                                          choices = c("HUMAN", "MOUSE", "YEAST",
+                                                      "ECOLI", "etc"),
+                                          width = "70%"),
                "fastaFile" = fileInput("fastaFile", h4("Fasta File"))
         )
     })
+    output$tertiaryDB <- renderUI({
+        if (is.null(input$databaseType))
+            return()
+        switch(input$databaseType,
+               "UniProtKB" = textAreaInput("accNos", h4("List of Accession Numbers"),
+                                           width = "70%"),
+               "SwissProt" = textAreaInput("accNos", h4("List of Accession Numbers"),
+                                           width = "70%"),
+               "fastaFile" = ""
+        )
+    })
+    
+    # ToDo on GCE module.
+    # Modularize the GCE code.
+    # Re-think reactivity of the instance table.
+    # New instances should load image from prospectorX disk image.
     
     prospX <- reactiveVal()
     prospX(NULL)
-    consoleFile <- "gceRunOutput.txt"
+    consoleStreamRegEx <- "(?<=span\\sid=.{1,20}\\>).+(?=\\<\\/span)"
+    
     consoleRead <- reactivePoll(1000, session,
                                 checkFunc = function() {
                                     if (file.exists(consoleFile))
@@ -44,37 +68,78 @@ shinyServer(function(input, output, server, session) {
                                     runStream <- system2("tail", 
                                             c("-n 1", consoleFile), 
                                             stdout=T)
-                                    str_extract_all(runStream,
-                                                    "\\<span.+$")
+                                    str_extract_all(runStream, consoleStreamRegEx)
                                 }
     )
     
-
     observeEvent(input$instances, {
         projectName <- gce_get_project()$name
         output$projectStatus <- renderText({projectName})
         instances <- fetchInstanceList()
+        selected <- as.integer(input$instanceNo)
         gceConnection <- prospX()
+        positionInList <- str_which(gceConnection$name,
+                                    instances$names[selected])
         if (!is.null(gceConnection)) {
-            if(gceConnection$status == "RUNNING") {
-                instances$status[1] <- "CONNECT-PROSPX"
-            }
+            instances$status[positionInList] <- "CONNECT-PROSPX"
         }
         output$instanceTable <- renderTable({ instances })
+        updateSelectInput(session, "instanceNo",
+                          choices = instances$ID,
+                          selected = head(instances$ID, 1)
+        )
     })
-    
+        
     observeEvent(input$connect, {
         instances <- fetchInstanceList()
-        gceConnection <- gce_vm(instances$names[1])
+        selected <- as.integer(input$instanceNo)
+        gceConnection <- gce_vm(instances$names[selected])
+        positionInList <- str_which(instances$names,
+                                    instances$names[selected])
         if (!is.null(gceConnection)) {
-            if(gceConnection$status == "RUNNING") {
-                instances$status[1] <- "CONNECT-PROSPX"
-            }
+            instances$status[positionInList] <- "CONNECT-PROSPX"
         }
         output$instanceTable <- renderTable({ instances })
         prospX(gceConnection)
     })
+
+    observeEvent(input$startVM, {
+        instances <- fetchInstanceList()
+        selected <- as.integer(input$instanceNo)
+        gce_vm_start(instances$names[selected])
+        gceConnection <- prospX()
+        if (!is.null(gceConnection)) {
+            instances$status[positionInList] <- "CONNECT-PROSPX"
+            positionInList <- str_which(instances$names,
+                                        gceConnection$name)
+        }
+    })
     
+    observeEvent(input$stopVM, {
+        instances <- fetchInstanceList()
+        selected <- as.integer(input$instanceNo)
+        gce_vm_stop(instances$names[selected])
+        gceConnection <- prospX()
+        if (!is.null(gceConnection)) {
+            positionInList <- str_which(instances$names,
+                                        gceConnection$name)
+            instances$status[positionInList] <- "CONNECT-PROSPX"
+        }
+    })
+
+    observeEvent(input$deleteVM, {
+        instances <- fetchInstanceList()
+        selected <- as.integer(input$instanceNo)
+        gce_vm_delete(instances$names[selected])
+        gceConnection <- prospX()
+        if (!is.null(gceConnection)) {
+            positionInList <- str_which(instances$names,
+                                        gceConnection$name)
+            instances$status[positionInList] <- "CONNECT-PROSPX"
+        }
+    })
+    
+        
     observeEvent(input$createNew, {
         # Needs to be connected to a prospector disk -
         gceConnection <- gce_vm_create(name = input$newInstanceName,
@@ -83,7 +148,6 @@ shinyServer(function(input, output, server, session) {
         prospX(gceConnection)
     })
     
-    demoScriptLocation <- "bash ./runDemo.sh"
     observeEvent(input$submitSearch, {
             gceConnection <- prospX()
             gce_ssh(gceConnection, demoScriptLocation, 
@@ -91,7 +155,7 @@ shinyServer(function(input, output, server, session) {
                     wait = FALSE)
     })
     
-    output$consoleOutput <- renderUI({ consoleRead() })
+    output$consoleOutput <- renderUI({ h5(consoleRead()) })
     
 
 })
