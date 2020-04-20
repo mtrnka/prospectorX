@@ -2,7 +2,7 @@ library(shiny)
 library(googleComputeEngineR)
 library(tidyverse)
 #source("touchstone.R")
-source("helperFunctions.R")
+#source("helperFunctions.R")
 
 # Define UI for application that draws a histogram
 shinyUI(fluidPage(
@@ -30,10 +30,10 @@ shinyUI(fluidPage(
                    uiOutput("secondaryDB"),
                    uiOutput("tertiaryDB"),
                    fileInput("moduleFile", 
-                             label = h4("moduleFile")),
+                             label = h4("Module File")),
                    fileInput("pdbID", 
-                             label = h4("pdbID")),
-                   fileInput("chainMapFile", label = h4("chainMapFile"))
+                             label = h4("pdb ID")),
+                   fileInput("chainMapFile", label = h4("Chainmap File"))
                )
         ),
         
