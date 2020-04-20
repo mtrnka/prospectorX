@@ -172,14 +172,15 @@ shinyUI(fluidPage(
                    )
                ),
                
-               column(6,
+               column(12,
                       fluidRow(
                           wellPanel(
                               h3("Submit"),
                               actionButton("submitSearch", "Submit", icon("paper-plane"),
                                            style="color: #fff; 
                                 background-color: #337ab7; 
-                                border-color: #2e6da4,")
+                                border-color: #2e6da4,"),
+                              htmlOutput("consoleOutput")
                           )
                       )
                )
