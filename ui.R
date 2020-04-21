@@ -1,6 +1,4 @@
-library(shiny)
 
-# Define UI for application that draws a histogram
 fluidPage(
     tags$head(tags$style(HTML(".shiny-text-output {background-color:#fff;}"))),
     
