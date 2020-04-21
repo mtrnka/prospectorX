@@ -10,18 +10,3 @@ fetchInstanceList <- function() {
                                stringsAsFactors = F)
    return(instanceTable)
 }
-
-serverGCEbutton <- function(inputName, GCRfunc) {
-   observeEvent(inputName, {
-      instances <- fetchInstanceList()
-      print(instances)
-      selected <- as.integer(input$instanceNo)
-      GCRfunc(instances$names[selected])
-      gceConnection <- prospX()
-      if (!is.null(gceConnection)) {
-         instances$status[positionInList] <- "CONNECT-PROSPX"
-         positionInList <- str_which(instances$names,
-                                     gceConnection$name)
-      }
-   })
-}   

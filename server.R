@@ -1,8 +1,8 @@
 library(shiny)
-# library(googleComputeEngineR)
-# library(tidyverse)
-#source("touchstone.R")
-# source("helperFunctions.R")
+library(googleComputeEngineR)
+library(tidyverse)
+
+source("R/gceUtils.R")
 
 consoleFile <- "gceRunOutput.txt"
 demoScriptLocation <- "bash ./runDemo.sh"
@@ -12,7 +12,7 @@ if (file.exists(consoleFile)) {
     system2("touch", consoleFile)
 }
 
-shinyServer(function(input, output, server, session) {
+function(input, output, session) {
     options(shiny.maxRequestSize=1000*1024^2)
     output$ms1fileName <- renderTable({ input$ms1peakFile[, 1:2] })
     output$ms2fileName <- renderTable({ input$ms2peakFile[, 1:2] })
@@ -26,13 +26,13 @@ shinyServer(function(input, output, server, session) {
             return()
         switch(input$databaseType,
                "UniProtKB" = selectInput("species", h4("Species Code"),
-                                          choices = c("HUMAN", "MOUSE", "YEAST",
-                                                      "ECOLI", "etc"),
-                                          width = "70%"),
+                                         choices = c("HUMAN", "MOUSE", "YEAST",
+                                                     "ECOLI", "etc"),
+                                         width = "70%"),
                "SwissProt" = selectInput("species", h4("Species Code"),
-                                          choices = c("HUMAN", "MOUSE", "YEAST",
-                                                      "ECOLI", "etc"),
-                                          width = "70%"),
+                                         choices = c("HUMAN", "MOUSE", "YEAST",
+                                                     "ECOLI", "etc"),
+                                         width = "70%"),
                "fastaFile" = fileInput("fastaFile", h4("Fasta File"))
         )
     })
@@ -66,8 +66,8 @@ shinyServer(function(input, output, server, session) {
                                 },
                                 valueFunc = function() {
                                     runStream <- system2("tail", 
-                                            c("-n 1", consoleFile), 
-                                            stdout=T)
+                                                         c("-n 1", consoleFile), 
+                                                         stdout=T)
                                     str_extract_all(runStream, consoleStreamRegEx)
                                 }
     )
@@ -89,7 +89,7 @@ shinyServer(function(input, output, server, session) {
                           selected = head(instances$ID, 1)
         )
     })
-        
+    
     observeEvent(input$connect, {
         instances <- fetchInstanceList()
         selected <- as.integer(input$instanceNo)
@@ -102,7 +102,7 @@ shinyServer(function(input, output, server, session) {
         output$instanceTable <- renderTable({ instances })
         prospX(gceConnection)
     })
-
+    
     observeEvent(input$startVM, {
         instances <- fetchInstanceList()
         selected <- as.integer(input$instanceNo)
@@ -126,7 +126,7 @@ shinyServer(function(input, output, server, session) {
             instances$status[positionInList] <- "CONNECT-PROSPX"
         }
     })
-
+    
     observeEvent(input$deleteVM, {
         instances <- fetchInstanceList()
         selected <- as.integer(input$instanceNo)
@@ -139,7 +139,7 @@ shinyServer(function(input, output, server, session) {
         }
     })
     
-        
+    
     observeEvent(input$createNew, {
         # Needs to be connected to a prospector disk -
         gceConnection <- gce_vm_create(name = input$newInstanceName,
@@ -149,14 +149,14 @@ shinyServer(function(input, output, server, session) {
     })
     
     observeEvent(input$submitSearch, {
-            gceConnection <- prospX()
-            gce_ssh(gceConnection, demoScriptLocation, 
-                    capture_text = consoleFile,
-                    wait = FALSE)
+        gceConnection <- prospX()
+        gce_ssh(gceConnection, demoScriptLocation, 
+                capture_text = consoleFile,
+                wait = FALSE)
     })
     
     output$consoleOutput <- renderUI({ h5(consoleRead()) })
     
-
-})
+    
+}
 

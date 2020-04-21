@@ -1,11 +1,7 @@
 library(shiny)
-library(googleComputeEngineR)
-library(tidyverse)
-#source("touchstone.R")
-#source("helperFunctions.R")
 
 # Define UI for application that draws a histogram
-shinyUI(fluidPage(
+fluidPage(
     tags$head(tags$style(HTML(".shiny-text-output {background-color:#fff;}"))),
     
     titlePanel("ProspectorX Demo; Front End"),
@@ -80,7 +76,7 @@ shinyUI(fluidPage(
                                                                 width = "100px"),
                                                    selectInput("instanceNo", h4("VM ID"),
                                                                choices = c(""),
-                                                             width = "100px")
+                                                               width = "100px")
                                             ),
                                             column(9, h4("GCP Project Name"),
                                                    verbatimTextOutput("projectStatus"),
@@ -197,4 +193,4 @@ shinyUI(fluidPage(
                )
         )
     )
-))
+)
