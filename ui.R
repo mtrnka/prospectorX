@@ -6,10 +6,10 @@ fluidPage(
         styles="text-align: right"),
     br(),
     
-    navbarPage("prospectorX-touchstone", 
-
+    navbarPage("prospectorX-touchstone", id="navbar",
                # Server Connection Tabset
-               tabPanel("Server Connection", fluidRow(
+               
+               tabPanel("Server Connection", value="serverTab", fluidRow(
                    column(5,
                           wellPanel(
                               h3("Server Information"),
@@ -74,11 +74,13 @@ fluidPage(
                    )
                )),
                
-               # Server Connection Tabset
+               # Parameter selecion / Job submisssion tabset
+               
                tabPanel("Job Submission", fluidRow(
-                   # Biological input area
                    column(3,
-                          wellPanel(#style = "background: #E3E7AF",
+                          # Database / PDB selecion panel
+                          
+                          wellPanel(
                               h3("Biological System Input"),
                               helpText("This are includes database info for the search \
                                       but also optional module and pdb files that will be used \
@@ -94,13 +96,16 @@ fluidPage(
                               fileInput("moduleFile",
                                         label = h4("Module File")),
                               fileInput("pdbID",
-                                        label = h4("pdb ID")),
+                                        label = h4("PDB ID")),
                               fileInput("chainMapFile", label = h4("Chainmap File"))
                           )
                    ),
-                   
+   
                    column(5,
-                          wellPanel(#style = "background: #BFC0C0",
+                          # Peaklist Input Area
+                          # Todo - make these options reactive based on Strategy
+                          
+                          wellPanel(#
                               h3("Peaklist Input"),
                               helpText("This area contains specifications for the \
                                             peaklist files... could be expanded to include raw \
@@ -118,23 +123,24 @@ fluidPage(
                                         multiple = T),
                               tableOutput("ms3fileName")
                           ),
-                          column(12,
-                                 fluidRow(
-                                     wellPanel(
-                                         h3("Submit"),
-                                         actionButton("submitSearch", "Submit", icon("paper-plane"),
-                                                      style="color: #fff;
+                          
+                          # Submit / Console Panel
+                          wellPanel(
+                              h3("Submit"),
+                              actionButton("submitSearch", "Submit", icon("paper-plane"),
+                                           style="color: #fff;
                                                    background-color: #337ab7;
                                                    border-color: #2e6da4,"),
-                                         br(),
-                                         htmlOutput("consoleOutput")
-                                     )
-                                 )
+                              br(),
+                              htmlOutput("consoleOutput")
                           )
                    ),
                    
                    column(4,
-                          wellPanel(#style = "background: #CEE7E6",
+                          # Strategy / MS Parameters Panel
+                          # Todo - Make strategy reacive with peaklist input.
+
+                          wellPanel(
                               h3("MS Experiment Input"),
                               selectInput("clStrategy", label = h4("MS Strategy"),
                                           choices = list("CID-MS2-CID-MS3",
@@ -183,24 +189,21 @@ fluidPage(
                                   column(6,
                                          sliderInput("ms1Tol", label = h4("MS1 tolerance (ppm)"),
                                                      min = 0, max = 50, value = 10, width = "70%"),
-                                         #verbatimTextOutput("ms1Tol"),
-                                         
                                          sliderInput("ms2Tol", label = h4("MS2 tolerance (ppm)"),
                                                      min = 0, max = 50, value = 20, width = "70%"),
-                                         #verbatimTextOutput("ms2Tol"),
                                   ),
-                                  
                                   column(6,
                                          sliderInput("ms3Tol", label = h4("MS3 tolerance (Da)"),
                                                      min = 0, max = 2.0, value = 0.7, step = 0.1, width = "70%")
-                                         #verbatimTextOutput("ms3Tol")
                                   )
                               )
                           )
                    )
                )),
                
-               # Server Connection Tabset
-               tabPanel("Analysis", fluidRow())
+               # Touchstone Analysis Tabset
+               tabPanel("Analysis", fluidRow(
+                   
+               ))
     )
 )

@@ -58,6 +58,22 @@ function(input, output, session) {
                                 }
     )
     
+    observe({
+        if (req(input$navbar == "serverTab")) {
+            projectName <- gce_get_project()$name
+            output$projectStatus <- renderText({projectName})
+            instances <- fetchInstanceList()
+            selected <- as.integer(input$instanceNo)
+            gceConnection <- prospX()
+            positionInList <- str_which(gceConnection$name,
+                                        instances$names[selected])
+            if (!is.null(gceConnection)) {
+                instances$status[positionInList] <- "CONNECT-PROSPX"
+            }
+            output$instanceTable <- renderTable({ instances })
+        }        
+    })
+    
     observeEvent(input$instances, {
         projectName <- gce_get_project()$name
         output$projectStatus <- renderText({projectName})
@@ -141,7 +157,7 @@ function(input, output, session) {
                 wait = FALSE)
     })
     
-    output$consoleOutput <- renderUI({ h5(consoleRead()) })
+    output$consoleOutput <- renderUI({ h4(consoleRead()) })
     
     
     output$gcePricing <- renderTable({ gcePrices.OR })
