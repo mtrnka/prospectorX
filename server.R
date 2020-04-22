@@ -1,4 +1,3 @@
-
 function(input, output, session) {
     options(shiny.maxRequestSize=1000*1024^2)
     output$ms1fileName <- renderTable({ input$ms1peakFile[, 1:2] })
@@ -145,5 +144,6 @@ function(input, output, session) {
     output$consoleOutput <- renderUI({ h5(consoleRead()) })
     
     
+    output$gcePricing <- renderTable({ gcePrices.OR })
 }
 

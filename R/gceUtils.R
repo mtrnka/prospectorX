@@ -10,3 +10,5 @@ fetchInstanceList <- function() {
                                stringsAsFactors = F)
    return(instanceTable)
 }
+
+gcePrices.OR <- read_tsv("R/gcePricesOR.txt")

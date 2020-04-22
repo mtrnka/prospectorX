@@ -4,6 +4,7 @@ library(googleComputeEngineR)
 library(tidyverse)
 
 source("R/gceUtils.R")
+
 consoleFile <- "gceRunOutput.txt"
 demoScriptLocation <- "bash ./runDemo.sh"
 
