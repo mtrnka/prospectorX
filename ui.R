@@ -6,8 +6,11 @@ fluidPage(
         styles="text-align: right"),
     br(),
     
-    navbarPage("prospectorX-touchstone", id="navbar",
-               # Server Connection Tabset
+    navbarPage(
+        title=#div(img(src="UCSF_logo_navy_RGB.png", height="30px"), 
+            "prospectorX-touchstone", 
+        id="navbar",
+        # Server Connection Tabset
                
                tabPanel("Server Connection", value="serverTab", fluidRow(
                    column(5,
@@ -66,7 +69,7 @@ fluidPage(
                                   ),
                                   
                                   column(9,
-                                         h4("Compute Engine Pricing - Oregon (us-west1)"),
+                                         h4("Compute Engine Hourly Cost - Oregon (us-west1)"),
                                          tableOutput("gcePricing")
                                   )
                               )
@@ -123,7 +126,7 @@ fluidPage(
                                         multiple = T),
                               tableOutput("ms3fileName")
                           ),
-                          
+
                           # Submit / Console Panel
                           wellPanel(
                               h3("Submit"),
@@ -135,7 +138,7 @@ fluidPage(
                               htmlOutput("consoleOutput")
                           )
                    ),
-                   
+
                    column(4,
                           # Strategy / MS Parameters Panel
                           # Todo - Make strategy reacive with peaklist input.
@@ -152,7 +155,7 @@ fluidPage(
                                                          "ETD-MS2-HCD-MS2"),
                                           selected = 1,
                                           width = "100%"),
-                              
+
                               fluidRow(
                                   column(6,
                                          selectInput("clReagent", label = h4("Crosslinker"),
@@ -172,7 +175,7 @@ fluidPage(
                                                      selected = 1,
                                                      width = "100%"),
                                   ),
-                                  
+
                                   column(6,
                                          selectInput("clQuench", label = h4("Quencher"),
                                                      choices = list("Ammonia" = 1,
@@ -184,7 +187,7 @@ fluidPage(
                                                      min = 0, max = 3, value = 1, width = "50%"),
                                   )
                               ),
-                              
+
                               fluidRow(
                                   column(6,
                                          sliderInput("ms1Tol", label = h4("MS1 tolerance (ppm)"),
@@ -200,10 +203,22 @@ fluidPage(
                           )
                    )
                )),
-               
-               # Touchstone Analysis Tabset
-               tabPanel("Analysis", fluidRow(
-                   
-               ))
+
+        # Touchstone Analysis Tabset
+        tabPanel("Analysis", sidebarLayout(
+            sidebarPanel(
+                h3("CLMS Dataset"),
+                fileInput("clmsData", "Choose Data"),
+                h4("Classification Plot"),
+                verbatimTextOutput("FDR"),
+                plotOutput("FDRplot"),
+                sliderInput("fdrPlotThreshold", "cutoff", min = -5, max = 15, 
+                            step = 0.1, value = 0)
+            ),
+            mainPanel(
+                h3("Output Panel"),
+                DT::dataTableOutput("dataFile")
+            )
+        ))
     )
 )

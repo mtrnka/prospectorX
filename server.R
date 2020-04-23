@@ -158,8 +158,81 @@ function(input, output, session) {
     })
     
     output$consoleOutput <- renderUI({ h4(consoleRead()) })
-    
-    
     output$gcePricing <- renderTable({ gcePrices.OR })
+
+
+    clTab <- reactive({
+        inFile <- input$clmsData
+        if (is.null(inFile)) return(NULL)
+        modFile <- input$moduleFile
+        pdbFile <- input$pdbID
+        chainFile <- input$chainMapFile
+        datTab <- new(Class="PPsearchCompareXL",
+                      dataFile=inFile$datapath,
+                      modFile=modFile$datapath,
+                      pdbDir="./",
+                      pdbFile=pdbFile$datapath,
+                      chainMapFile=chainFile$datapath,
+                      preProcessFunction=nameAccSwap)
+        # Renumber to account for N-terminal Flag and make residue numbers correspond
+        # to Uniprot sequence
+        datTab <- renumberProtein(datTab,"Q9UM00ntf",-25)
+        datTab <- buildClassifier(datTab)
+        datTab <- getSearchTable(datTab)
+        return(datTab)
+    })
+    
+    output$dataFile <- DT::renderDataTable({
+        if (is.null(clTab())) return(NULL)
+        clTab()
+    })
+    
+    output$FDRplot <- renderPlot({
+        if (is.null(clTab())) return(NULL)
+        fdrPlots(clTab(), cutoff = input$fdrPlotThreshold)
+    })
+    
+    output$FDR <- renderText({
+        if (is.null(clTab())) return(NULL)
+        paste0("FDR: ", 
+               as.character(
+                   round(100 * calculateFDR(clTab(), 
+                                              threshold = input$fdrPlotThreshold), 2)
+                   ), "%"
+               )
+    })
+    
 }
 
+#         
+#         
+#         inFile <- input$clmsData
+#         modFile <- input$moduleFile
+#         pdbFile <- input$pdbID
+#         chainFile <- input$chainMapFile
+# 
+# 
+#         if (is.null(inFile))
+#             return(NULL)
+# 
+# #        datTab <- read_tsv(inFile$datapath)
+# #        datTab %>% slice(1:100)
+#         
+#         datTab <- new(Class="PPsearchCompareXL",
+#                   dataFile=inFile$datapath,
+#                   modFile=modFile$datapath,
+#                   pdbDir="./",
+#                   pdbFile=pdbFile$datapath,
+#                   chainMapFile=chainFile$datapath,
+#                   preProcessFunction=nameAccSwap)
+#         # Renumber to account for N-terminal Flag and make residue numbers correspond
+#         # to Uniprot sequence
+#         datTab <- renumberProtein(datTab,"Q9UM00ntf",-25)
+#         datTab <- buildClassifier(datTab)
+#         datTab <- getSearchTable(datTab)
+#         return(datTab)
+#         
+#     })
+# 
+# }
+# 
