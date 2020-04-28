@@ -25,3 +25,7 @@ nameAccSwap <- function(dataTable) {
    dataTable$Acc.2 <- proteinName.2
    return(dataTable)
 }
+
+
+
+

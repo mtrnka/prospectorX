@@ -113,18 +113,36 @@ fluidPage(
                               helpText("This area contains specifications for the \
                                             peaklist files... could be expanded to include raw \
                                             files and peaklist generation"),
-                              uiOutput("ms1info"),
-                              uiOutput("ms2info"),
-                              uiOutput("ms3info"),
-                              fileInput("ms1peakFile", h4("ms1peakFiles"),
-                                        multiple = T),
-                              tableOutput("ms1fileName"),
-                              fileInput("ms2peakFile", h4("ms2peakFiles"),
-                                        multiple = T),
-                              tableOutput("ms2fileName"),
-                              fileInput("ms3peakFile", h4("ms3peakFiles"),
-                                        multiple = T),
-                              tableOutput("ms3fileName")
+                             # verbatimTextOutput("ms3"),
+                             # verbatimTextOutput("etdms2"),
+                             # verbatimTextOutput("cidhcdms2"),
+                              conditionalPanel(
+                                  condition = "output.cidhcdms2",
+                                  fileInput("ms2peakFile", h4("CID/HCD ms2 peaklists"),
+                                            multiple = T),
+                                  tableOutput("ms2peakFile")
+                              ),
+                              conditionalPanel(
+                                  condition = "output.etdms2",
+                                  fileInput("etdMS2peakFile", h4("ETD ms2 peaklists"),
+                                            multiple = T),
+                                  tableOutput("etdMS2fileName")
+                              ),
+                              conditionalPanel(
+                                  condition = "output.ms3",
+                                  fileInput("ms3peakFile", h4("CID/HCD ms3 peaklists"),
+                                            multiple = T),
+                                  tableOutput("ms3fileName")
+                              )
+                          #     fileInput("ms1peakFile", h4("ms1peakFiles"),
+                          #               multiple = T),
+                          #     tableOutput("ms1fileName"),
+                          #     fileInput("ms2peakFile", h4("ms2peakFiles"),
+                          #               multiple = T),
+                          #     tableOutput("ms2fileName"),
+                          #     fileInput("ms3peakFile", h4("ms3peakFiles"),
+                          #               multiple = T),
+                          #     tableOutput("ms3fileName")
                           ),
 
                           # Submit / Console Panel
@@ -206,18 +224,61 @@ fluidPage(
 
         # Touchstone Analysis Tabset
         tabPanel("Analysis", sidebarLayout(
-            sidebarPanel(
+            sidebarPanel(width = 3,
                 h3("CLMS Dataset"),
                 fileInput("clmsData", "Choose Data"),
-                h4("Classification Plot"),
-                verbatimTextOutput("FDR"),
-                plotOutput("FDRplot"),
-                sliderInput("fdrPlotThreshold", "cutoff", min = -5, max = 15, 
-                            step = 0.1, value = 0)
+                selectInput("summaryLevel", label = h4("Summarization Level"),
+                            choices = list("CSMs",
+                                           "Unique Residue Pairs",
+                                           "Protein Pairs",
+                                           "Domains",
+                                           "Modules")
+                ),
+                fluidRow(
+                    column(6, 
+                           sliderInput("svmThreshold", "SVM Threshold", min = -5, max = 15, 
+                                       step = 0.1, value = 0),
+                           actionButton("applyFilters", h5("Apply Filters")),
+                           br(),br(),
+                           sliderInput("scoreDiffThreshold", "Score.Diff Threshold", min = 0, max = 30,
+                                       step = 0.5, value = 0),
+                           br(),
+                           sliderInput("peptideLengthFilter", "Min Peptide Length", min = 3, max = 7,
+                                       step = 1, value = 4),
+                    ),
+                    column(6,
+                           sliderInput("distanceThreshold", "Violation Distance", min = 0, max = 100,
+                                       step = 1, value = 30),
+                           actionButton("resetFilters", h5("Reset Filters")),
+                           br(),br(),
+                           sliderInput("ms1MassError", "Prec Mass Error", min = -20, max = 20,
+                                       step = 0.5, value = c(-5, 5))
+                    )
+                )
             ),
             mainPanel(
-                h3("Output Panel"),
-                DT::dataTableOutput("dataFile")
+                h4("Console Output"),
+                    verbatimTextOutput("consoleOut"),
+                h4("Classification Plots"),
+                verbatimTextOutput("numberClassedLinks"),
+                fluidRow(
+                    column(4,
+                           verbatimTextOutput("FDR"),
+                           plotOutput("FDRplot")
+                    ),
+                    column(4,
+                           verbatimTextOutput("VR"),
+                           plotOutput("distancePlot")
+                    ),
+                    column(4,
+                           verbatimTextOutput("meanError"),
+                           plotOutput("massErrorPlot")
+                    )
+                ),
+                fluidRow(
+                    h3("Output Panel"),
+                    DT::dataTableOutput("dataFile")
+                )
             )
         ))
     )

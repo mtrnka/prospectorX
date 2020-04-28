@@ -1,6 +1,6 @@
 function(input, output, session) {
     options(shiny.maxRequestSize=1000*1024^2)
-    output$ms1fileName <- renderTable({ input$ms1peakFile[, 1:2] })
+    output$etdMS2fileNamee <- renderTable({ input$etdMS2peakFile[, 1:2] })
     output$ms2fileName <- renderTable({ input$ms2peakFile[, 1:2] })
     output$ms3fileName <- renderTable({ input$ms3peakFile[, 1:2] })
     output$clReagentName <- renderPrint({ input$clReagent })
@@ -34,6 +34,26 @@ function(input, output, session) {
         )
     })
     
+    output$ms3 <- reactive({
+        str_detect(input$clStrategy, "MS3")
+    })
+
+    output$etdms2 <- reactive({
+        str_detect(input$clStrategy, "ETD-MS2")
+    })
+
+    output$cidhcdms2 <- reactive({
+        str_detect(input$clStrategy, "(HCD|CID)-MS2")
+    })
+    
+    outputOptions(output, "ms3", suspendWhenHidden = FALSE)
+    outputOptions(output, "etdms2", suspendWhenHidden = FALSE)
+    outputOptions(output, "cidhcdms2", suspendWhenHidden = FALSE)
+    
+    # clStratMS2ETD <- reactive({
+    #     str_detect(input$clStrategy, "ETD-MS2")
+    # })
+      
     # ToDo on GCE module.
     # Modularize the GCE code.
     # Re-think reactivity of the instance table.
@@ -141,7 +161,6 @@ function(input, output, session) {
         }
     })
     
-    
     observeEvent(input$createNew, {
         # Needs to be connected to a prospector disk -
         gceConnection <- gce_vm_create(name = input$newInstanceName,
@@ -160,79 +179,152 @@ function(input, output, session) {
     output$consoleOutput <- renderUI({ h4(consoleRead()) })
     output$gcePricing <- renderTable({ gcePrices.OR })
 
+    pdbTab <- reactive({
+        inFile <- input$pdbID
+        if (is.null(inFile)) return(NULL)
+        return(parsePDB(inFile$datapath))
+    })
 
-    clTab <- reactive({
+    chainTab <- reactive({
+        inFile <- input$chainMapFile
+        if (is.null(inFile)) return(NULL)
+        return(readChainMap(inFile$datapath))
+    })
+
+    csmTab <- reactive({
         inFile <- input$clmsData
         if (is.null(inFile)) return(NULL)
         modFile <- input$moduleFile
-        pdbFile <- input$pdbID
-        chainFile <- input$chainMapFile
+        consoleMessage("*** Measuring PDB file crosslinks ***")
         datTab <- new(Class="PPsearchCompareXL",
                       dataFile=inFile$datapath,
                       modFile=modFile$datapath,
-                      pdbDir="./",
-                      pdbFile=pdbFile$datapath,
-                      chainMapFile=chainFile$datapath,
-                      preProcessFunction=nameAccSwap)
+                      preProcessFunction=nameAccSwap,
+                      chainMapFile=chainTab(),
+                      pdbFile=pdbTab())
         # Renumber to account for N-terminal Flag and make residue numbers correspond
         # to Uniprot sequence
-        datTab <- renumberProtein(datTab,"Q9UM00ntf",-25)
+#        datTab <- renumberProtein(datTab,"Q9UM00ntf",-25)
+        head(getSearchTable(datTab))
+        consoleMessage("*** Building SVM Classifier ***")
         datTab <- buildClassifier(datTab)
         datTab <- getSearchTable(datTab)
-        return(datTab)
+    })
+
+    consoleMessage <- reactiveVal("")
+    
+    output$consoleOut <- renderText({
+        consoleMessage()
+    })
+    
+    clTab <- reactive({
+        consoleMessage("*** Calculating Residue-Pairs ***")
+        bestResPairHackDT(csmTab())
+    })
+
+    tabLevel <- reactive({
+        switch(input$summaryLevel,
+               "CSMs" = csmTab(),
+               "Unique Residue Pairs" = clTab()
+        ) 
+    })
+
+    tabLevelFiltered <- reactive({
+        #input$applyFilters, {
+        if (is.null(csmTab)) {return(NULL)}
+        tabLevel() %>% filter(Score.Diff >= input$scoreDiffThreshold,
+                            Len.Pep.1 >= input$peptideLengthFilter,
+                            Len.Pep.2 >= input$peptideLengthFilter,
+                            ppm >= input$ms1MassError[1],
+                            ppm <= input$ms1MassError[2])
+    })
+
+    observeEvent(input$resetFilters, {
+        updateSliderInput(session, "ms1MassError",
+                          min = floor(min(tabLevel()$ppm, na.rm=T)),
+                          max = ceiling(max(tabLevel()$ppm, na.rm=T))
+        )
+        updateSliderInput(session, "svmThreshold", 
+                          min = floor(min(tabLevel()$dvals)),
+                          max = ceiling(max(tabLevel()$dvals))
+        )
+    })
+    
+    
+    dataTable <- reactive({
+        if (is.null(csmTab())) return(NULL)
+        tabLevelFiltered() %>% 
+            filter(Decoy=="Target",
+                   dvals >= input$svmThreshold)
+    })
+    
+    output$numberClassedLinks <- renderText({
+        if (is.null(tabLevel())) return(NULL)
+        paste0("Number of ", input$summaryLevel, ": ", nrow(dataTable()))
     })
     
     output$dataFile <- DT::renderDataTable({
-        if (is.null(clTab())) return(NULL)
-        clTab()
-    })
-    
-    output$FDRplot <- renderPlot({
-        if (is.null(clTab())) return(NULL)
-        fdrPlots(clTab(), cutoff = input$fdrPlotThreshold)
+        if (is.null(csmTab())) return(NULL)
+        dataTable()
     })
     
     output$FDR <- renderText({
-        if (is.null(clTab())) return(NULL)
+        if (is.null(tabLevel())) return(NULL)
         paste0("FDR: ", 
-               as.character(
-                   round(100 * calculateFDR(clTab(), 
-                                              threshold = input$fdrPlotThreshold), 2)
-                   ), "%"
-               )
+               as.character(round(100 * calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold), 2)),
+               "%"
+        )
     })
     
+    output$FDRplot <- renderPlot({
+        if (is.null(tabLevel())) return(NULL)
+        fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
+    })
+    
+    randomDists <- reactive({
+        consoleMessage("*** geting random Lys-Lys distances ***")
+        getRandomCrosslinks(pdbTab(), 5000)
+    })
+
+    targetDists <- reactive({
+        if (is.null(csmTab())) return(NULL)
+        tabLevelFiltered() %>% 
+            filter(Decoy=="Target", dvals >= input$svmThreshold, !is.na(distance)) %>%
+            pull(distance)
+    })
+
+    classedMassErrors <- reactive({
+        subset(tabLevelFiltered(), dvals >= input$svmThreshold)$ppm
+    })
+    
+    VR <- reactive({
+        sum(targetDists() > input$distanceThreshold) / length(targetDists())
+    })
+
+    output$VR <- renderText({
+        if (is.null(targetDists())) return(NULL)
+        paste0("Violation Rate: ", as.character(round(100 * VR(), 2)), "%"
+        )
+    })
+
+    output$distancePlot <- renderPlot({
+        if (is.null(targetDists())) return(NULL)
+        distancePlot(targetDists(), randomDists(), threshold = input$distanceThreshold)
+    })
+    
+    output$massErrorPlot <- renderPlot({
+        if (is.null(tabLevel())) return(NULL)
+        massErrorPlot(classedMassErrors(), 
+                      lowPlotRange = floor(min(tabLevel()$ppm, na.rm=T)),
+                      highPlotRange = ceiling(max(tabLevel()$ppm, na.rm=T)),
+                      lowThresh = input$ms1MassError[1], 
+                      highThresh = input$ms1MassError[2])
+    })
+    
+    output$meanError <- renderText({
+        if (is.null(tabLevel())) return(NULL)
+        paste0("mean error: ", round(mean(classedMassErrors(), na.rm=T),2), " ppm")
+    })    
 }
 
-#         
-#         
-#         inFile <- input$clmsData
-#         modFile <- input$moduleFile
-#         pdbFile <- input$pdbID
-#         chainFile <- input$chainMapFile
-# 
-# 
-#         if (is.null(inFile))
-#             return(NULL)
-# 
-# #        datTab <- read_tsv(inFile$datapath)
-# #        datTab %>% slice(1:100)
-#         
-#         datTab <- new(Class="PPsearchCompareXL",
-#                   dataFile=inFile$datapath,
-#                   modFile=modFile$datapath,
-#                   pdbDir="./",
-#                   pdbFile=pdbFile$datapath,
-#                   chainMapFile=chainFile$datapath,
-#                   preProcessFunction=nameAccSwap)
-#         # Renumber to account for N-terminal Flag and make residue numbers correspond
-#         # to Uniprot sequence
-#         datTab <- renumberProtein(datTab,"Q9UM00ntf",-25)
-#         datTab <- buildClassifier(datTab)
-#         datTab <- getSearchTable(datTab)
-#         return(datTab)
-#         
-#     })
-# 
-# }
-# 
+

@@ -13,7 +13,7 @@ View(gce_list_machinetype()$items)
 View(gce_list_images(image_project="prospector-236322")$items)
 
 prospXL <- gce_vm_create(name = "prospx",
-                        predefined_type = "n1-standard-1",
+                        predefined_type = "f1-micro",
                         image_family = "debian-9"
                         #        metadata = list(<key> = <value?)
 )

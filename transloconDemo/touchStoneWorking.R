@@ -48,16 +48,16 @@ setMethod("initialize", "PPsearchCompareXL",
               .Object@dataTable <- calculatePercentMatched(.Object@dataTable)
               cat("*** Calculate Lengths *** \n")
               .Object@dataTable <- calculatePeptideLengths(.Object@dataTable)
-              cat("*** Filtering on Length *** \n")
-              .Object@dataTable <- lengthFilter(.Object@dataTable, minLen = 4, maxLen = 25)
+#              cat("*** Filtering on Length *** \n")
+#              .Object@dataTable <- lengthFilter(.Object@dataTable, minLen = 4, maxLen = 25)
               cat("*** Filtering on Score *** \n")
               .Object@dataTable <- scoreFilter(.Object@dataTable, minScore = 0)
-              if (!is.na(pdbFile)) {
+              if (!is.null(pdbFile)) {
                   cat("*** Calculating Distances *** \n")
-                  chainFile <- chainMapFile
-                  pdbFile <- pdbFile
-                  .Object@chainMap <- readChainMap(chainFile)
-                  .Object@caTracedPDB <- parsePDB(pdbFile)
+#                  chainFile <- chainMapFile
+#                  pdbFile <- pdbFile
+                  .Object@chainMap <- chainMapFile
+                  .Object@caTracedPDB <- pdbFile
                   .Object@dataTable <- measureDistances(.Object@dataTable,
                                                         .Object@caTracedPDB,
                                                         .Object@chainMap)
@@ -198,6 +198,7 @@ readProspectorXLOutput <- function(inputFile, preProcessFUN=function(x) x, ...){
     dataTable <- as.data.frame(t(dataTable),stringsAsFactors=F)
     names(dataTable) <- header
     dataTable <- preProcessFUN(dataTable, ...)
+    dataTable$distance <- NA_integer_
     #Add stuff to remove useless columns from data table.
     return(cleanTypes(dataTable))
 }
@@ -286,6 +287,7 @@ multiEuclideanDistance <- function(parsedPDB, residue1, chain1, residue2, chain2
 }
 
 measureDistances <- function(searchTable, parsedPDB, chainMap) {
+#    searchTable <- searchTable[searchTable$Decoy == "Target",]
     chainLookup <- function(proteinName) {
         if (grepl("r[0-9]\\_",proteinName)) {
             return ("Dec")
@@ -296,8 +298,8 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
         }
     }
     pdbList <- list(parsedPDB)
-    chains1 <- vapply(searchTable$Acc.1, chainLookup, FUN.VALUE="")
-    chains2 <- vapply(searchTable$Acc.2, chainLookup, FUN.VALUE="")
+    chains1 <- vapply(searchTable$Protein.1, chainLookup, FUN.VALUE="")
+    chains2 <- vapply(searchTable$Protein.2, chainLookup, FUN.VALUE="")
     distance <- mapply(
         multiEuclideanDistance,
         pdbList,
@@ -305,7 +307,10 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
         chains1,
         searchTable$XLink.AA.2,
         chains2)
+#    naValues <- is.na(distance)
+#    return(data.frame(dvals=searchTable$dvals[!naValues], distance=distance[!naValues]))
     searchTable$distance <- distance
+    print("*** measured distances on pdb file ***")
     return(searchTable)
 }
 
@@ -789,10 +794,11 @@ setMethod("buildClassifier", "PPsearchCompareXL",
           function(object){
               require(e1071)
               datTab <- object@dataTable
+              datTab$massError <- abs(datTab$ppm)
               ind <- sample(nrow(datTab),nrow(datTab)/2)
               train <- datTab[ind,]
               test <- datTab[-1 * ind,]
-              params <- c("Score.Diff", "percMatch","z","Score","num.CSM","ppm", "Rk.2","Rk.1")
+              params <- c("Score.Diff", "percMatch","z","Score","num.CSM","massError", "Rk.2","Rk.1")
 #              params <- c("percMatch","Score.Diff","z","Score","num.CSM","Rk.2","Rk.1","Len.Pep.1","Len.Pep.2")
               wghts <- numeric(0)
               wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
@@ -810,6 +816,7 @@ setMethod("buildClassifier", "PPsearchCompareXL",
               tab <- table(datTab$Decoy2, datTab$dvals > 0)
               if (tab[1] < tab[3]) {
                   datTab$dvals <- -1 * datTab$dvals
+                  tab <- table(datTab$Decoy2, datTab$dvals > 0)
               }
               print(tab)
               print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
@@ -1271,6 +1278,9 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
     plot(decoyHist, add=T, col="salmon")
     plot(doubleDecoyHist, add=T, col="goldenrod1")
     abline(v=cutoff, lwd=4, lt=2, col="red")
+    legend("right", c("Tar-Tar", "Tar-Dec", "Dec-Dec"), 
+           fill = c("lightblue", "salmon", "goldenrod1"),
+           bty="n")
 }    
 
 assignGroups <- function(datTab, pgroups=peptideGroups) {
@@ -1371,11 +1381,60 @@ reduceToXlinkHacky <- function(datTab, classifier=classifier) {
     return(datTab)
 }
 
-bestResPairHackDT <- function(datTab, classifier=classifier){
+bestResPairHackDT <- function(datTab, classifier=dvals){
     quoClass <- enquo(classifier)
-    datTabR <- datTab %>% group_by(crosslink) %>%
+    datTabR <- datTab %>% group_by(xlinkedResPair) %>%
         filter(!! quoClass==max(!! quoClass)) %>%
         ungroup()
     return(datTabR)
 }
+
+
+getRandomCrosslinks <- function(pdbFile, numCrosslinks) {
+    pdbFile <- pdbFile[pdbFile$resid=="LYS",]
+    xl1 <- sample(nrow(pdbFile), numCrosslinks, replace=T)
+    xl2 <- sample(nrow(pdbFile), numCrosslinks, replace=T)
+    randomDists <- mapply(multiEuclideanDistance, list(pdbFile), 
+                          pdbFile[xl1, "resno"], 
+                          pdbFile[xl1, "chain"],
+                          pdbFile[xl2, "resno"],
+                          pdbFile[xl2, "chain"]
+    )
+    return(randomDists)
+}
+
+massErrorPlot <- function(massErrors, lowThresh, highThresh, lowPlotRange, highPlotRange) {
+    hist(massErrors, col="slategray3", 
+         xlim=c(lowPlotRange, highPlotRange), 
+         breaks=25,
+         xlab = "Mass Error (ppm)",
+         main = "Precursor Mass Deviation")
+    abline(v = c(lowThresh, highThresh), lwd = 4, lt = 2, col = "red")
+}
+
+
+distancePlot <- function(targetDists, randomDists, threshold) {
+    targetDists.size <- length(!is.na(targetDists))
+    randomDists.size <- length(!is.na(randomDists))
+    maxDist <- ceiling(max(c(randomDists, targetDists), na.rm=T)) + 5
+    dists <- hist(targetDists, breaks=seq(-5, maxDist, 5), plot=F)
+    r.dists <- hist(randomDists, breaks=seq(-5, maxDist, 5), plot=F)
+    r.dists$counts <- r.dists$counts * (targetDists.size / randomDists.size)
+    col1 <- rgb(141, 90, 151, alpha = 150, maxColorValue = 255)
+    col2 <- rgb(184, 235, 208, alpha = 150, maxColorValue = 255)
+    ylim.value <- ceiling(max(c(dists$counts, r.dists$counts)))
+    plot(r.dists, col=col1, ylim=c(0, ylim.value),
+         xlab = expression(paste("C", alpha, "-C", alpha, " Distance (Å)")),
+         main = "Crosslink Violations")
+    plot(dists, col=col2, add=T)
+    abline(v=threshold, lwd=4, lt=2, col="orangered")
+    legend("right", c("experimental", "random distribution"), fill = c(col2, col1),
+           bty="n")
+}
+
+
+
+
+
+
 
