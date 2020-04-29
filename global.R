@@ -3,6 +3,7 @@ library(shiny)
 library(googleComputeEngineR)
 library(tidyverse)
 library(DT)
+library(urltools)
 
 source("R/gceUtils.R")
 source("transloconDemo/touchStoneWorking.R")

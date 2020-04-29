@@ -319,12 +319,12 @@ populateModules <- function(searchTable, moduleDefinitions) {
     pep1.modul <- mapply(
         assignModule,
         searchTable$XLink.AA.1,
-        searchTable$Protein.1,
+        searchTable$Acc.1,
         modules)
     pep2.modul <- mapply(
         assignModule,
         searchTable$XLink.AA.2,
-        searchTable$Protein.2,
+        searchTable$Acc.2,
         modules)
     levs <- unlist(sapply(moduleDefinitions, function(x) c(x[3])))
     names(levs) <- NULL
@@ -372,7 +372,7 @@ calculatePairs <- function(searchTable){
                                          paste(searchTable$DB.Peptide.1, searchTable$DB.Peptide.2, sep="::"),
                                          paste(searchTable$DB.Peptide.2, searchTable$DB.Peptide.1, sep="::"))
     searchTable$xlinkedPepPair <- as.factor(searchTable$xlinkedPepPair)
-    searchTable <- searchTable %>% add_count(xlinkedResPair, name="num.CSM")
+    searchTable <- searchTable %>% add_count(xlinkedResPair, name="numCSM")
     return(searchTable)
 }
 
@@ -714,7 +714,7 @@ setMethod("pairPlot", "PPsearchCompareXL",
     #flag to show if it is residue pair reduced etc.
     require(ggplot2)
     require(colorspace)
-    datTab <- removeModule(datTab, removeMods)
+#    datTab <- removeModule(datTab, removeMods)
     datTabR <- datTab
     tempXLinkAA1 <- datTab$XLink.AA.1
     tempAcc1 <- datTab$Acc.1
@@ -729,7 +729,7 @@ setMethod("pairPlot", "PPsearchCompareXL",
     }
     modTab <- .rejiggerMods(modTab)
     gg <- ggplot(datTab, aes(XLink.AA.1, XLink.AA.2)) +
-        #        geom_point(aes(size=num,alpha=Score.Diff,col=distance >35)) +
+                geom_point(aes(size=numCSM,alpha=Score.Diff,col=color)) +
         geom_vline(aes(xintercept=XLink.AA.1), modTab, color="palevioletred2",
                    linetype="21", size=0.75, alpha=0.5) +
         geom_hline(aes(yintercept=XLink.AA.2), modTab, color="palevioletred2",
@@ -749,11 +749,14 @@ setMethod("pairPlot", "PPsearchCompareXL",
         scale_size_area(limits=c(1,70)) +
         scale_alpha(limits=c(10,55), range=c(0.8,1))
     
-    if (color=="byDistance") {gg <- gg + geom_point(aes(size=num,alpha=Score.Diff,col=distance <35))
-    }   else if (color=="byQuant") {gg <- gg + geom_point(aes(size=numSC, alpha=Score.Diff,col=num)) +
+    if (color=="byDistance") {
+        gg <- gg + geom_point(aes(size=numCSM,alpha=Score.Diff,col=distance <35))
+    }   else if (color=="byQuant") {
+        gg <- gg + geom_point(aes(size=numCSM, alpha=Score.Diff,col=numCSM)) +
         #scale_color_gradientn(breaks=c(-10,-3,-2,-1,0,1,2,3,10),colors=diverge_hsv(8))
-        scale_color_gradient2(low=muted("blue"),high=muted("red"),mid="grey70",midpoint=0,limits=c(-1.5,1.5))
-    }   else {gg <- gg + geom_point(aes(size=num,alpha=Score.Diff),col=color)
+        scale_color_gradient2(low=muted("blue"), high=muted("red"), mid="grey70", midpoint=0, limits=c(-1.5,1.5))
+    }   else {
+        gg <- gg + geom_point(aes(size=numCSM, alpha=Score.Diff), col=color)
     }
     plot(gg)
 }
@@ -798,8 +801,7 @@ setMethod("buildClassifier", "PPsearchCompareXL",
               ind <- sample(nrow(datTab),nrow(datTab)/2)
               train <- datTab[ind,]
               test <- datTab[-1 * ind,]
-              params <- c("Score.Diff", "percMatch","z","Score","num.CSM","massError", "Rk.2","Rk.1")
-#              params <- c("percMatch","Score.Diff","z","Score","num.CSM","Rk.2","Rk.1","Len.Pep.1","Len.Pep.2")
+              params <- c("Score.Diff", "percMatch","z","Score","numCSM","massError", "Rk.2","Rk.1")
               wghts <- numeric(0)
               wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
               wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
@@ -877,6 +879,96 @@ extractSpecFromMGFpd <- function(scanNo, mgfFile) {
     endLine <- grep("END IONS", spectrum)[1]
     spectrum <- paste(c(spectrum[1:endLine],""), sep="", collapse="\n")
     return(spectrum)
+}
+
+temp <- "http://msviewer.ucsf.edu/prospector/cgi-bin/mssearch.cgi?search_name=msproduct&output_type=HTML&report_title=MS-Product&version=6.2.1%20Basic&data_source=Data%20From%20File&data_filename=%2Fvar%2Flib%2Fprospector%2Fweb%2Fresults%2Fmsviewer%2Fv%2Fd%2Fvdibnsypj7%2FZ190207_filt2%2FZ20190207-09etd.mgf&use_instrument_ion_types=1&msms_min_precursor_mass=0&instrument_name=ESI-ETD-high-res&display_graph=1&msms_parent_mass_tolerance=15&msms_parent_mass_tolerance_units=ppm&fragment_masses_tolerance=25&fragment_masses_tolerance_units=ppm&msms_pk_filter=Max%20MSMS%20Pks&msms_max_peaks=80&fraction=1&spot_number=86.533&run=1&spectrum_number=1&max_charge=5&msms_precursor_charge=5&sequence=HPGSFDVVHVK%28%2BDSS%29DANGNSFATR&s=1&sequence2=ASTSK%28%2BDSS%29SESSQK&s2=1&count_pos_z=Ignore%20Basic%20AA&link_search_type=DSS&"
+temp2 <- unlist(str_split(temp, "&"))
+temp3 <- str_split(temp2, "=")
+templateKeys <- map_chr(temp3, function(x) {x[1]})
+templateVals <- map_chr(temp3, function(x) {x[2]})
+templateVals <- url_decode(templateVals)
+
+generateMSViewerLink <- function(fraction, rt, z, peptide.1, peptide.2) {
+    templateVals[6] <- str_replace(templateVals[6], "(?<=\\/)[[A-Z]][[0-9]]+\\-.+?\\.mgf", fraction)
+    templateVals[18] <- rt
+    templateVals[21] <- z
+    templateVals[22] <- z
+    templateVals[23] <- peptide.1
+    templateVals[25] <- peptide.2
+    templateVals <- url_encode(templateVals)
+    zipped <- str_c(templateKeys[1:28], templateVals[1:28], sep="=", collapse="&")
+    str_c('<a href=\"', zipped, '\" target=\"_blank\">Spectrum</a>')
+}
+
+generateCheckBoxes <- function(datTab) {
+    datTab$selected <- str_c('<input type="checkbox" names="row', datTab$xlinkedResPair, '"value="', datTab$xlinkedResPair, '">',"")
+    return(datTab)
+}
+
+formatXLTable <- function(datTab) {
+    datTab$percMatch <- round(datTab$percMatch * 100, 2)
+    datTab$dvals <- round(datTab$dvals, 2)
+    datTab$Fraction <- gsub("(.*)\\.[^.]+$", "\\1", datTab$Fraction)
+    names(datTab) <- gsub("dvals", "SVM.score", names(datTab))
+    annoyingColumns <- str_which(names(datTab), "(Int|Dec)[a-z]{2}\\.[[1-2]]")
+    datTab <- datTab[, -annoyingColumns]
+    datTab <- datTab %>% 
+        select(-starts_with("Res"), 
+               -starts_with("Decoy"), 
+               -starts_with("Num."), 
+               -massError, 
+               -xlinkedPepPair)
+    datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
+    datTab <- datTab %>% select(selected,
+                                link,
+                                xlinkedResPair, 
+                                SVM.score, 
+                                distance,
+                                m.z,
+                                z,
+                                ppm,
+                                DB.Peptide.1,
+                                DB.Peptide.2,
+                                Score,
+                                Score.Diff,
+                                Sc.1,
+                                Rk.1,
+                                Sc.2,
+                                Rk.2,
+                                Acc.1,
+                                XLink.AA.1,
+                                Protein.1,
+                                Modul.1,
+                                Species.1,
+                                Acc.2,
+                                XLink.AA.2,
+                                Protein.2,
+                                Modul.2,
+                                Species.2,
+                                xlinkClass,
+                                percMatch,
+                                Len.Pep.1,
+                                Len.Pep.2,
+                                Peptide.1,
+                                Peptide.2,
+                                Elemental.Composition,
+                                Fraction,
+                                RT,
+                                Spectrum,
+                                MSMS.Info)
+    return(datTab)
+}
+
+generateXVisOutput <- function(datTab) {
+#    Protein1 <- str_c("sp", pull(datTab, Acc.1), pull(datTab, Species.1), sep = "|")
+#    Protein2 <- str_c("sp", pull(datTab, Acc.2), pull(datTab, Species.2), sep = "|")
+    Protein1 <- pull(datTab, Protein.1)
+    Protein2 <- pull(datTab, Protein.2)
+    AbsPos1 <- pull(datTab, XLink.AA.1)
+    AbsPos2 <- pull(datTab, XLink.AA.2)
+    IDScore <- pull(datTab, SVM.score)
+    xVisXL <- data.frame("Protein1" = Protein1, "Protein2" = Protein2, 
+                         "AbsPos1" = AbsPos1, "AbsPos2"= AbsPos2, "Id-Score" = IDScore)
 }
 
 getLineNos <- function(mgfFile, scanNo) {

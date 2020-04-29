@@ -209,6 +209,11 @@ function(input, output, session) {
         consoleMessage("*** Building SVM Classifier ***")
         datTab <- buildClassifier(datTab)
         datTab <- getSearchTable(datTab)
+        datTab <- datTab %>% 
+            mutate(link = pmap_chr(
+                list(Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
+        datTab <- generateCheckBoxes(datTab)
+        return(datTab)
     })
 
     consoleMessage <- reactiveVal("")
@@ -250,8 +255,7 @@ function(input, output, session) {
         )
     })
     
-    
-    dataTable <- reactive({
+    xlTable <- reactive({
         if (is.null(csmTab())) return(NULL)
         tabLevelFiltered() %>% 
             filter(Decoy=="Target",
@@ -260,12 +264,12 @@ function(input, output, session) {
     
     output$numberClassedLinks <- renderText({
         if (is.null(tabLevel())) return(NULL)
-        paste0("Number of ", input$summaryLevel, ": ", nrow(dataTable()))
+        paste0("Number of ", input$summaryLevel, ": ", nrow(xlTable()))
     })
     
     output$dataFile <- DT::renderDataTable({
-        if (is.null(csmTab())) return(NULL)
-        dataTable()
+        if (is.null(csmTab()) ) return(NULL)
+        DT::datatable(formatXLTable(xlTable()), filter="top", escape=FALSE)
     })
     
     output$FDR <- renderText({
