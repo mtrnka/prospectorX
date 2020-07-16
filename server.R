@@ -85,8 +85,10 @@ function(input, output, session) {
             instances <- fetchInstanceList()
             selected <- as.integer(input$instanceNo)
             gceConnection <- prospX()
+            if (!is.null(gceConnection)) {
             positionInList <- str_which(gceConnection$name,
                                         instances$names[selected])
+            }
             if (!is.null(gceConnection)) {
                 instances$status[positionInList] <- "CONNECT-PROSPX"
             }
