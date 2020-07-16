@@ -304,7 +304,7 @@ fluidPage(
                          and I use them routinely, but are not currently functional
                          in the shiny version")
                        ),
-                       mainPanel(h3("CSMs summarized at Module Level to Show Interacting Domains"),
+                       mainPanel(h3("CSMs summarized at Domain Level to Show Interacting Domains"),
                                  h4("Swi6 Binding To Nucleosome"),
                                  h4("Sanulli et al, Nature (2019)"), br(),br(),
                                  fluidRow(
