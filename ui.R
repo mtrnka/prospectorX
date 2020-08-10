@@ -30,11 +30,25 @@ fluidPage(
                                    width = "70%"),
                        uiOutput("secondaryDB"),
                        uiOutput("tertiaryDB"),
-                       fileInput("moduleFile",
-                                 label = h4("Module File")),
-                       fileInput("pdbID",
-                                 label = h4("PDB ID")),
-                       fileInput("chainMapFile", label = h4("Chainmap File"))
+                       
+                       h4("Module File"),
+                       shinyFilesButton("moduleFile", "Browse...",
+                                        "Select the module file",
+                                        multiple = F, viewtype = "detail"),
+                       h4("PDB ID"),
+                       shinyFilesButton("pdbID", "Browse...",
+                                        "Select the pdb/cif file",
+                                        multiple = F, viewtype = "detail"),
+                       h4("Chainmap File"),
+                       shinyFilesButton("chainMapFile", "Browse...",
+                                        "Select the chainmap file",
+                                        multiple = F, viewtype = "detail"),
+
+                       # fileInput("moduleFile",
+                       #           label = h4("Module File")),
+                       # fileInput("pdbID",
+                       #           label = h4("PDB ID")),
+                       # fileInput("chainMapFile", label = h4("Chainmap File"))
                    )
             ),
             
@@ -160,7 +174,14 @@ fluidPage(
         tabPanel("Analysis", sidebarLayout(
             sidebarPanel(width = 3,
                          h3("CLMS Dataset"),
-                         fileInput("clmsData", "Choose Data"),
+                         
+                         h4("Crosslink Data"),
+                         shinyFilesButton("clmsData", "Browse...",
+                                          "Select the search compare crosslink output",
+                                          multiple = F, viewtype = "detail"),
+                         
+                         
+#                         fileInput("clmsData", "Choose Data"),
                          selectInput("summaryLevel", label = h4("Summarization Level"),
                                      choices = list("CSMs",
                                                     "Unique Residue Pairs",

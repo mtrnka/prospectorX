@@ -1,21 +1,11 @@
 # load modules and do forth here.
 library(shiny)
-library(googleComputeEngineR)
+library(shinyFiles)
 library(tidyverse)
 library(DT)
 library(urltools)
 
-source("R/gceUtils.R")
 source("transloconDemo/touchStoneWorking.R")
-
-
-consoleFile <- "gceRunOutput.txt"
-demoScriptLocation <- "bash ./runDemo.sh"
-
-if (file.exists(consoleFile)) {
-   system2("rm", consoleFile)
-   system2("touch", consoleFile)
-}
 
 nameAccSwap <- function(dataTable) {
    proteinName.1 <- dataTable$Protein.1

@@ -1,6 +1,14 @@
 function(input, output, session) {
     options(shiny.maxRequestSize=1000*1024^2)
-    output$etdMS2fileNamee <- renderTable({ input$etdMS2peakFile[, 1:2] })
+
+    exDir = c(wd= './transloconDemo')
+    shinyFileChoose(input, "moduleFile", roots=exDir, filetypes=c('', 'txt'))
+    shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
+    shinyFileChoose(input, "chainMapFile", roots=exDir, filetypes=c('', 'txt'))
+    shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
+
+  
+    output$etdMS2fileName <- renderTable({ input$etdMS2peakFile[, 1:2] })
     output$ms2fileName <- renderTable({ input$ms2peakFile[, 1:2] })
     output$ms3fileName <- renderTable({ input$ms3peakFile[, 1:2] })
     output$clReagentName <- renderPrint({ input$clReagent })
@@ -58,24 +66,29 @@ function(input, output, session) {
     # Modularize the GCE code.
     # Re-think reactivity of the instance table.
     # New instances should load image from prospectorX disk image.
-    
+
     pdbTab <- reactive({
-        inFile <- input$pdbID
-        if (is.null(inFile)) return(NULL)
-        return(parsePDB(inFile$datapath))
+      if (!is.integer(input$pdbID)) {
+        inFile <- parseFilePaths(exDir, input$pdbID)
+#        if (is.null(inFile)) return(NULL)
+      return(parsePDB(inFile$datapath))
+      }
     })
 
     chainTab <- reactive({
-        inFile <- input$chainMapFile
-        if (is.null(inFile)) return(NULL)
+      if (!is.integer(input$chainMapFile)) {
+        inFile <- parseFilePaths(exDir, input$chainMapFile)
+        #        if (is.null(inFile)) return(NULL)
         return(readChainMap(inFile$datapath))
+      }
     })
 
     csmTab <- reactive({
-        inFile <- input$clmsData
-        if (is.null(inFile)) return(NULL)
-        modFile <- input$moduleFile
-        consoleMessage("*** Measuring PDB file crosslinks ***")
+      if (!is.integer(input$clmsData) & !is.integer(input$moduleFile)) {
+        inFile <- parseFilePaths(exDir, input$clmsData)
+#        if (is.integer(inFile$file)) return(NULL)
+        modFile <- parseFilePaths(exDir, input$moduleFile)
+#        consoleMessage("*** Measuring PDB file crosslinks ***")
         datTab <- new(Class="PPsearchCompareXL",
                       dataFile=inFile$datapath,
                       modFile=modFile$datapath,
@@ -86,32 +99,34 @@ function(input, output, session) {
         # to Uniprot sequence
 #        datTab <- renumberProtein(datTab,"Q9UM00ntf",-25)
         head(getSearchTable(datTab))
-        consoleMessage("*** Building SVM Classifier ***")
+#        consoleMessage("*** Building SVM Classifier ***")
         datTab <- buildClassifier(datTab)
         datTab <- getSearchTable(datTab)
-        datTab <- datTab %>% 
+        datTab <- datTab %>%
             mutate(link = pmap_chr(
                 list(Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
         datTab <- generateCheckBoxes(datTab)
         return(datTab)
+      }
     })
 
-    consoleMessage <- reactiveVal("")
+#    consoleMessage <- reactiveVal("")
     
-    output$consoleOut <- renderText({
-        consoleMessage()
-    })
+    # output$consoleOut <- renderText({
+    #     consoleMessage()
+    # })
     
     clTab <- reactive({
-        consoleMessage("*** Calculating Residue-Pairs ***")
+#        consoleMessage("*** Calculating Residue-Pairs ***")
         bestResPairHackDT(csmTab())
     })
 
     tabLevel <- reactive({
-        switch(input$summaryLevel,
-               "CSMs" = csmTab(),
-               "Unique Residue Pairs" = clTab()
-        ) 
+      if (is.null(csmTab)) {return(NULL)}
+      switch(input$summaryLevel,
+             "CSMs" = csmTab(),
+             "Unique Residue Pairs" = clTab()
+      )
     })
 
     tabLevelFiltered <- reactive({
@@ -134,53 +149,54 @@ function(input, output, session) {
                           max = ceiling(max(tabLevel()$dvals))
         )
     })
-    
+
     xlTable <- reactive({
-        if (is.null(csmTab())) return(NULL)
-        tabLevelFiltered() %>% 
-            filter(Decoy=="Target",
-                   dvals >= input$svmThreshold)
+      if (is.null(csmTab())) return(NULL)
+      tabLevelFiltered() %>% 
+        filter(Decoy=="Target",
+               dvals >= input$svmThreshold)
     })
     
     output$numberClassedLinks <- renderText({
-        if (is.null(tabLevel())) return(NULL)
+      if (!is.null(tabLevel())) {
         paste0("Number of ", input$summaryLevel, ": ", nrow(xlTable()))
+      }
     })
     
     output$dataFile <- DT::renderDataTable({
-        if (is.null(csmTab()) ) return(NULL)
-        DT::datatable(formatXLTable(xlTable()), filter="top", escape=FALSE)
+      if (is.null(csmTab()) ) return(NULL)
+      DT::datatable(formatXLTable(xlTable()), filter="top", escape=FALSE)
     })
     
     output$FDR <- renderText({
-        if (is.null(tabLevel())) return(NULL)
-        paste0("FDR: ", 
-               as.character(round(100 * calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold), 2)),
-               "%"
-        )
+      if (is.null(tabLevel())) return(NULL)
+      paste0("FDR: ", 
+             as.character(round(100 * calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold), 2)),
+             "%"
+      )
     })
     
     output$FDRplot <- renderPlot({
-        if (is.null(tabLevel())) return(NULL)
-        fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
+      if (is.null(tabLevel())) return(NULL)
+      fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
     })
-    
+
     randomDists <- reactive({
-        consoleMessage("*** geting random Lys-Lys distances ***")
+#        consoleMessage("*** geting random Lys-Lys distances ***")
         getRandomCrosslinks(pdbTab(), 5000)
     })
 
     targetDists <- reactive({
-        if (is.null(csmTab())) return(NULL)
-        tabLevelFiltered() %>% 
-            filter(Decoy=="Target", dvals >= input$svmThreshold, !is.na(distance)) %>%
-            pull(distance)
+      if (is.null(csmTab())) return(NULL)
+      tabLevelFiltered() %>% 
+        filter(Decoy=="Target", dvals >= input$svmThreshold, !is.na(distance)) %>%
+        pull(distance)
     })
 
     classedMassErrors <- reactive({
         subset(tabLevelFiltered(), dvals >= input$svmThreshold)$ppm
     })
-    
+
     VR <- reactive({
         sum(targetDists() > input$distanceThreshold) / length(targetDists())
     })
@@ -195,7 +211,7 @@ function(input, output, session) {
         if (is.null(targetDists())) return(NULL)
         distancePlot(targetDists(), randomDists(), threshold = input$distanceThreshold)
     })
-    
+
     output$massErrorPlot <- renderPlot({
         if (is.null(tabLevel())) return(NULL)
         massErrorPlot(classedMassErrors(), 
@@ -204,11 +220,10 @@ function(input, output, session) {
                       lowThresh = input$ms1MassError[1], 
                       highThresh = input$ms1MassError[2])
     })
-    
+
     output$meanError <- renderText({
         if (is.null(tabLevel())) return(NULL)
         paste0("mean error: ", round(mean(classedMassErrors(), na.rm=T),2), " ppm")
     })    
 }
-
 

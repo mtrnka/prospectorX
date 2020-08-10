@@ -48,22 +48,18 @@ setMethod("initialize", "PPsearchCompareXL",
               .Object@dataTable <- calculatePercentMatched(.Object@dataTable)
               cat("*** Calculate Lengths *** \n")
               .Object@dataTable <- calculatePeptideLengths(.Object@dataTable)
-#              cat("*** Filtering on Length *** \n")
-#              .Object@dataTable <- lengthFilter(.Object@dataTable, minLen = 4, maxLen = 25)
+# #              cat("*** Filtering on Length *** \n")
+# #              .Object@dataTable <- lengthFilter(.Object@dataTable, minLen = 4, maxLen = 25)
               cat("*** Filtering on Score *** \n")
               .Object@dataTable <- scoreFilter(.Object@dataTable, minScore = 0)
               if (!is.null(pdbFile)) {
                   cat("*** Calculating Distances *** \n")
-#                  chainFile <- chainMapFile
-#                  pdbFile <- pdbFile
                   .Object@chainMap <- chainMapFile
                   .Object@caTracedPDB <- pdbFile
                   .Object@dataTable <- measureDistances(.Object@dataTable,
                                                         .Object@caTracedPDB,
                                                         .Object@chainMap)
               }
-              #Add validity check on .Object
-              #validObject(.Object)
               return(.Object)
           }
 )
