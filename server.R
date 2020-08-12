@@ -2,75 +2,46 @@ function(input, output, session) {
     options(shiny.maxRequestSize=1000*1024^2)
 
     exDir = c(wd= './transloconDemo')
+    shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
     shinyFileChoose(input, "moduleFile", roots=exDir, filetypes=c('', 'txt'))
     shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
     shinyFileChoose(input, "chainMapFile", roots=exDir, filetypes=c('', 'txt'))
-    shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
-
-  
-    output$etdMS2fileName <- renderTable({ input$etdMS2peakFile[, 1:2] })
-    output$ms2fileName <- renderTable({ input$ms2peakFile[, 1:2] })
-    output$ms3fileName <- renderTable({ input$ms3peakFile[, 1:2] })
-    output$clReagentName <- renderPrint({ input$clReagent })
-    output$ms1Tol <- renderPrint({ input$ms1Tol })
-    output$ms2Tol <- renderPrint({ input$ms2Tol })
-    output$ms3Tol <- renderPrint({ input$ms3Tol })
-    output$secondaryDB <- renderUI({
-        if (is.null(input$databaseType))
-            return()
-        switch(input$databaseType,
-               "UniProtKB" = selectInput("species", h4("Species Code"),
-                                         choices = c("HUMAN", "MOUSE", "YEAST",
-                                                     "ECOLI", "etc"),
-                                         width = "70%"),
-               "SwissProt" = selectInput("species", h4("Species Code"),
-                                         choices = c("HUMAN", "MOUSE", "YEAST",
-                                                     "ECOLI", "etc"),
-                                         width = "70%"),
-               "fastaFile" = fileInput("fastaFile", h4("Fasta File"))
-        )
-    })
-    output$tertiaryDB <- renderUI({
-        if (is.null(input$databaseType))
-            return()
-        switch(input$databaseType,
-               "UniProtKB" = textAreaInput("accNos", h4("List of Accession Numbers"),
-                                           width = "70%"),
-               "SwissProt" = textAreaInput("accNos", h4("List of Accession Numbers"),
-                                           width = "70%"),
-               "fastaFile" = ""
-        )
+    
+    output$clmsDataFile <- renderPrint({
+      if (is.integer(input$clmsData)) {
+        cat("No file selected")
+      } else {
+        cat(parseFilePaths(exDir, input$clmsData)$name)
+      }
     })
     
-    output$ms3 <- reactive({
-        str_detect(input$clStrategy, "MS3")
+    output$modFile <- renderPrint({
+      if (is.integer(input$moduleFile)) {
+        cat("No file selected")
+      } else {
+        cat(parseFilePaths(exDir, input$moduleFile)$name)
+      }
     })
 
-    output$etdms2 <- reactive({
-        str_detect(input$clStrategy, "ETD-MS2")
-    })
-
-    output$cidhcdms2 <- reactive({
-        str_detect(input$clStrategy, "(HCD|CID)-MS2")
+    output$pdbTabFile <- renderPrint({
+      if (is.integer(input$pdbID)) {
+        cat("No file selected")
+      } else {
+        cat(parseFilePaths(exDir, input$pdbID)$name)
+      }
     })
     
-    outputOptions(output, "ms3", suspendWhenHidden = FALSE)
-    outputOptions(output, "etdms2", suspendWhenHidden = FALSE)
-    outputOptions(output, "cidhcdms2", suspendWhenHidden = FALSE)
+    output$chainFile <- renderPrint({
+      if (is.integer(input$chainMapFile)) {
+        cat("No file selected")
+      } else {
+        cat(parseFilePaths(exDir, input$chainMapFile)$name)
+      }
+    })
     
-    # clStratMS2ETD <- reactive({
-    #     str_detect(input$clStrategy, "ETD-MS2")
-    # })
-      
-    # ToDo on GCE module.
-    # Modularize the GCE code.
-    # Re-think reactivity of the instance table.
-    # New instances should load image from prospectorX disk image.
-
     pdbTab <- reactive({
       if (!is.integer(input$pdbID)) {
         inFile <- parseFilePaths(exDir, input$pdbID)
-#        if (is.null(inFile)) return(NULL)
       return(parsePDB(inFile$datapath))
       }
     })
@@ -78,7 +49,6 @@ function(input, output, session) {
     chainTab <- reactive({
       if (!is.integer(input$chainMapFile)) {
         inFile <- parseFilePaths(exDir, input$chainMapFile)
-        #        if (is.null(inFile)) return(NULL)
         return(readChainMap(inFile$datapath))
       }
     })
@@ -86,9 +56,7 @@ function(input, output, session) {
     csmTab <- reactive({
       if (!is.integer(input$clmsData) & !is.integer(input$moduleFile)) {
         inFile <- parseFilePaths(exDir, input$clmsData)
-#        if (is.integer(inFile$file)) return(NULL)
         modFile <- parseFilePaths(exDir, input$moduleFile)
-#        consoleMessage("*** Measuring PDB file crosslinks ***")
         datTab <- new(Class="PPsearchCompareXL",
                       dataFile=inFile$datapath,
                       modFile=modFile$datapath,
