@@ -4,8 +4,9 @@ library(shinyFiles)
 library(tidyverse)
 library(DT)
 library(urltools)
+library(e1071)
 
-source("transloconDemo/touchStoneWorking.R")
+source("R/touchStone.R")
 
 nameAccSwap <- function(dataTable) {
    proteinName.1 <- dataTable$Protein.1
