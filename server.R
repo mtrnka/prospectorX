@@ -20,6 +20,7 @@ function(input, output, session) {
         cat("No file selected")
       } else {
         cat(parseFilePaths(exDir, input$moduleFile)$name)
+        consoleMessage("*** Parsing Module File ***")
       }
     })
 
@@ -28,6 +29,7 @@ function(input, output, session) {
         cat("No file selected")
       } else {
         cat(parseFilePaths(exDir, input$pdbID)$name)
+        consoleMessage("*** Reading Protein Structure File ***")
       }
     })
     
@@ -36,6 +38,7 @@ function(input, output, session) {
         cat("No file selected")
       } else {
         cat(parseFilePaths(exDir, input$chainMapFile)$name)
+        consoleMessage("*** Reading Chainmap File ***")
       }
     })
     
@@ -57,35 +60,35 @@ function(input, output, session) {
       if (!is.integer(input$clmsData) & !is.integer(input$moduleFile)) {
         inFile <- parseFilePaths(exDir, input$clmsData)
         modFile <- parseFilePaths(exDir, input$moduleFile)
+        consoleMessage("*** Loading Search Compare File ***")
         datTab <- new(Class="PPsearchCompareXL",
                       dataFile=inFile$datapath,
                       modFile=modFile$datapath,
-                      preProcessFunction=nameAccSwap,
+                      #preProcessFunction=nameAccSwap,
                       chainMapFile=chainTab(),
                       pdbFile=pdbTab())
-        # Renumber to account for N-terminal Flag and make residue numbers correspond
-        # to Uniprot sequence
-#        datTab <- renumberProtein(datTab,"Q9UM00ntf",-25)
-        head(getSearchTable(datTab))
-#        consoleMessage("*** Building SVM Classifier ***")
+        consoleMessage("*** Building SVM Classifier ***")
         datTab <- buildClassifier(datTab)
         datTab <- getSearchTable(datTab)
+        if (!"Spectrum" %in% names(datTab)) {
+          datTab$Spectrum <- 1
+        }
         datTab <- datTab %>%
-            mutate(link = pmap_chr(
-                list(Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
+          mutate(link = pmap_chr(
+            list(Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
         datTab <- generateCheckBoxes(datTab)
         return(datTab)
       }
     })
-
-#    consoleMessage <- reactiveVal("")
     
-    # output$consoleOut <- renderText({
-    #     consoleMessage()
-    # })
+    consoleMessage <- reactiveVal("")
+    
+    output$consoleOut <- renderText({
+      consoleMessage()
+    })
     
     clTab <- reactive({
-#        consoleMessage("*** Calculating Residue-Pairs ***")
+        consoleMessage("*** Calculating Residue-Pairs ***")
         bestResPairHackDT(csmTab())
     })
 
