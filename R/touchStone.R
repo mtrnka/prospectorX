@@ -1,113 +1,37 @@
-setClass(Class="PPsearchCompareXL",
-         slots=c(
-             dataTable="data.frame",
-             peaklistDir="character",
-             fastaDB="character",
-             modulFile="list",
-             chainMap="list",
-             caTracedPDB="data.frame",
-             reductionState="factor",
-             expSource="character",
-             preProcessFunction="function")
-)
+#print("touchStone module loaded")
 
-setMethod("initialize", "PPsearchCompareXL",
-          function(.Object, 
-                   #directory,
-                   peaklistDir=NA_character_,
-                   dataFile, 
-                   modFile, 
-                   pdbDir=NA_character_, 
-                   pdbFile=NA_character_, 
-                   chainMapFile=NA_character_, 
-                   redState=factor("spectralMatchPairs"), 
-                   expSource=NA_character_,
-                   preProcessFunction=function(x) x){
-              .Object@expSource <- expSource
-              levels(.Object@reductionState) <- c("spectralMatchPairs",
-                                                  "xlinkedResPairs",
-                                                  "xlinkedPepPairs")
-              .Object@reductionState = redState
-              cat("*** Reading Prospector XL Search Table *** \n")
-              #.Object@parentDir <- directory
-              #setwd(directory)
-              .Object@peaklistDir <- peaklistDir
-              .Object@dataTable <- readProspectorXLOutput(dataFile, preProcessFunction)
-              cat("*** Reading Modules *** \n")
-              .Object@modulFile <- readModuleFile(modFile)
-              .Object@dataTable <- populateModules(.Object@dataTable,
-                                                   .Object@modulFile)
-              cat("*** Calculating Decoys *** \n")
-              .Object@dataTable <- calculateDecoys(.Object@dataTable)
-              cat("*** Calculating Xlinked Pairs *** \n")
-              .Object@dataTable <- calculatePairs(.Object@dataTable)
-              cat("*** Calculate Class *** \n")
-              .Object@dataTable <- assignXLinkClass(.Object@dataTable)
-              cat("*** Calculate Percent Matched *** \n")
-              .Object@dataTable <- calculatePercentMatched(.Object@dataTable)
-              cat("*** Calculate Lengths *** \n")
-              .Object@dataTable <- calculatePeptideLengths(.Object@dataTable)
-# #              cat("*** Filtering on Length *** \n")
-# #              .Object@dataTable <- lengthFilter(.Object@dataTable, minLen = 4, maxLen = 25)
-              cat("*** Filtering on Score *** \n")
-              .Object@dataTable <- scoreFilter(.Object@dataTable, minScore = 0)
-              if (!is.null(pdbFile)) {
-                  cat("*** Calculating Distances *** \n")
-                  .Object@chainMap <- chainMapFile
-                  .Object@caTracedPDB <- pdbFile
-                  .Object@dataTable <- measureDistances(.Object@dataTable,
-                                                        .Object@caTracedPDB,
-                                                        .Object@chainMap)
-              }
-              return(.Object)
-          }
-)
-
-setMethod("show", "PPsearchCompareXL",
-          function(object){
-              cat("*** Class: PPsearchCompareXL *** \n")
-              cat("*** Truncated Data table *** \n")
-              print(head(object@dataTable, 5))
-          }
-)
-
-setGeneric("getSearchTable", function(object) {
-    standardGeneric("getSearchTable")
+readProspectorXLOutput <- function(inputFile){
+    dataTable <- read_tsv(inputFile)
+    header <- names(dataTable) %>%
+        str_replace("_[[0-9]]$", "") %>%
+        str_replace_all("[[:space:]]",".") %>%
+        str_replace_all("#", "Num")
+    acc_pos <- str_which(header, "Acc")
+    header[acc_pos] <- c("Acc.1", "Acc.2")
+    spec_pos <- str_which(header, "Species")
+    header[spec_pos] <- c("Species.1", "Species.2")
+    prot_pos <- str_which(header, "Protein")
+    header[prot_pos] <- c("Protein.1", "Protein.2")
+    names(dataTable) <- header
+    if (!"Spectrum" %in% names(dataTable)) {
+        dataTable$Spectrum <- 1
+    }
+    if (!"distance" %in% names(dataTable)) {
+        dataTable$distance <- NA_real_
+    }
+    dataTable <- calculateDecoys(dataTable)
+    dataTable <- calculatePairs(dataTable)
+    dataTable <- assignXLinkClass(dataTable)
+    dataTable <- calculatePercentMatched(dataTable)
+    dataTable <- calculatePeptideLengths(dataTable)
+    dataTable <- lengthFilter(dataTable, minLen = 3, maxLen = 25)
+    dataTable <- scoreFilter(dataTable, minScore = 0)
+    #Add stuff to remove useless columns from data table.
+    return(dataTable)
 }
-)
 
-setMethod("getSearchTable", "PPsearchCompareXL",
-          function(object){
-              return(object@dataTable)
-          }
-)
-
-setGeneric("bestResPair", function(object, ...) {
-    standardGeneric("bestResPair")
-}
-)
-
-setMethod("bestResPair", "PPsearchCompareXL",
-          function(object, classifier=c("Score.Diff.Boosted", "Score.Diff",
-                                        "Score", "MSMS.Info")){
-              datTab <- object@dataTable
-              datTabR <- object@dataTable
-              xlinks <- unique(datTab$xlinkedResPair)
-              for (param in classifier) {
-                  if (param %in% names(datTabR)) {
-                      datTabR <- reduceTo(datTabR, "xlinkedResPair", param)
-                  }
-              }
-              cat(c(nrow(datTabR), length(xlinks),
-                    sum(datTabR$num), nrow(datTab), "\n"), sep="\t")
-              object@reductionState = factor("xlinkedResPairs")
-              object@dataTable <- datTabR
-              return(object)
-          }
-)
-
-bestResPairDT <- function(datTab, classifier=c("Score.Diff","Score",
-                              "MSMS.Info")){
+bestResPair <- function(datTab, classifier=c("Score.Diff","Score",
+                                             "MSMS.Info")){
     datTabR <- datTab
     xlinks <- unique(datTab$xlinkedResPair)
     for (param in classifier) {
@@ -119,28 +43,6 @@ bestResPairDT <- function(datTab, classifier=c("Score.Diff","Score",
           sum(datTabR$num), nrow(datTab), "\n"), sep="\t")
     return(datTabR)
 }
-
-setGeneric("bestPepPair", function(object, ...) {
-    standardGeneric("bestPepPair")
-}
-)
-
-setMethod("bestPepPair", "PPsearchCompareXL",
-          function(object, classifier=c("Score.Diff","Score",
-                                        "Peptide.2","Peptide.1",
-                                        "MSMS.Info")) {
-#Best Peptide Pair function needs to be re-thought.  Currently not using.
-                            datTab <- object@dataTable
-              datTabR <- object@dataTable
-              xlinks <- unique(datTab$xlinkedPepPair)
-              for (param in classifier) {
-                  datTabR <- reduceTo(datTabR, "xlinkedPepPair", param)
-              }
-              cat(c(nrow(datTabR), length(xlinks),
-                    sum(datTabR$num), nrow(datTab), "\n"), sep="\t")
-              return(datTabR)
-          }
-)
 
 reduceTo <- function(datTab, category, classifier) {
     if (class(datTab[[classifier]]) == "factor") {
@@ -168,34 +70,6 @@ reduceTo <- function(datTab, category, classifier) {
         outTab$Int.Pk.2 <- sapply(outTab[[category]], function(x) xlinks[x, 3])
     }
     return(outTab)
-}
-
-readProspectorXLOutput <- function(inputFile, preProcessFUN=function(x) x, ...){
-    inFile <- file(inputFile,open="r")
-    header <- readLines(inFile,n=1)
-    dataTable <- readLines(inFile,n=-1)
-    close(inFile)
-    #Clean up header:
-    header <- lineSplit(header)
-    header <- gsub("[[:space:]]",".",header)
-    header <- gsub("#","Num",header)
-    acc_pos <- grep("Acc",header)
-    header[acc_pos[1]] <- "Acc.1"
-    header[acc_pos[2]] <- "Acc.2"
-    spec_pos <- grep("Species",header)
-    header[spec_pos[1]] <- "Species.1"
-    header[spec_pos[2]] <- "Species.2"
-    prot_pos <- grep("Protein",header)
-    header[prot_pos[1]] <- "Protein.1"
-    header[prot_pos[2]] <- "Protein.2"
-    #Clean up data:
-    dataTable <- rbind(sapply(as.list(dataTable),lineSplit))
-    dataTable <- as.data.frame(t(dataTable),stringsAsFactors=F)
-    names(dataTable) <- header
-    dataTable <- preProcessFUN(dataTable, ...)
-    dataTable$distance <- NA_integer_
-    #Add stuff to remove useless columns from data table.
-    return(cleanTypes(dataTable))
 }
 
 readModuleFile <- function(modFile) {
@@ -402,7 +276,6 @@ scoreFilter <- function(searchTable, minScore=0) {
     return(searchTable)
 }
 
-
 lineSplit <- function(line) {
     l <- nchar(line)
     g <- gregexpr("\t",line)[[1]]
@@ -421,7 +294,7 @@ cleanTypes <- function(dataTable) {
         stringsAsFactors=FALSE))
 }
 
-calculateFDR <- function(datTab, threshold=-100, scalingFactor=10, classifier="dvals") {
+calculateFDR <- function(datTab, threshold=-100, scalingFactor=5, classifier="dvals") {
     datTab <- datTab[datTab[[classifier]] >= threshold, ]
     fdrTable <- table(datTab$Decoy)
     if (is.na(fdrTable["DoubleDecoy"])) {fdrTable["DoubleDecoy"] <- 0}
@@ -527,27 +400,6 @@ findThreshold2 <- function(datTab, targetER=0.05, minThreshold=-5,
     return(threshold)
 }
 
-
-# calculateFDRbin <- function(datTab, breaks, scalingFactor=10) {
-#     datTab$group <- as.numeric(cut(datTab$dvals, breaks))
-#     result <- as.numeric(by(datTab, datTab$group, calculateFDR, threshold=-100))
-#     return(abs(result))
-# }
-
-
-setGeneric("prepPairs", function(object, threshold, classifier) {
-    standardGeneric("prepPairs")
-}
-)
-
-setMethod("prepPairs", "PPsearchCompareXL",
-          function(object, threshold, classifier){
-              object@dataTable <- thresholdResults(object@dataTable, threshold, classifier)
-              object@dataTable <- removeDecoys(object@dataTable)
-              return(object)
-          }
-)
-
 removeDecoys <- function(datTab) {
     datTabR <- datTab[datTab$Decoy=="Target",]
     return(datTabR)
@@ -558,112 +410,30 @@ thresholdResults <- function(datTab, threshold, classifier="Score.Diff") {
     return(datTabR)
 }
 
-setGeneric("splitSources", function(object, sourceTab) {
-    standardGeneric("splitSources")
-}
-)
-
-setMethod("splitSources", "PPsearchCompareXL",
-          #sourceTab is a list that maps Fractions onto expSources
-          #st <- list("source1" = c("Fraction1, Fraction2, ...), "source2" = c(Fract))
-          function(object, sourceTab){
-              datTab <- object@dataTable 
-              splitResult <- lapply(sourceTab, function (x) {
-                  datTab2 <- datTab[datTab$Fraction %in% x, ]
-                  obj <- object
-                  obj@dataTable <- datTab2
-                  obj }
-              )
-              for (result in names(splitResult)) {
-                  splitResult[[result]]@expSource <- result
-              }
-              return(splitResult)
-          }
-)
-
-setGeneric("renameProtein", function(object, oldName, newName) {
-    standardGeneric("renameProtein")
-}
-)
-
-setMethod("renameProtein", "PPsearchCompareXL",
-          function(object, oldName, newName){
-              object@dataTable <- 
-                  .renameProtein(object@dataTable, oldName, newName)
-              object@modulFile <- 
-                  .renameModTable(object@modulFile, oldName, newName)
-              return(object)
-          }
-)
-
-.renameProtein <- function(datTab, oldName, newName) {
+renameProtein <- function(datTab, oldName, newName) {
     datTab$Acc.1 <- gsub(oldName, newName, datTab$Acc.1)
     datTab$Acc.2 <- gsub(oldName, newName, datTab$Acc.2)
     datTab <- calculatePairs(datTab)
     return(datTab)
 }
 
-.renameModTable <- function(modTab, oldName, newName) {
+renameModTable <- function(modTab, oldName, newName) {
     names(modTab) <- gsub(oldName, newName, names(modTab))
     return(modTab)
 }
 
-setGeneric("renumberProtein", function(object, protein, shift) {
-    standardGeneric("renumberProtein")
+renumberProtein <-function(dt, protein, shift) {
+    dt[dt$Acc.1==protein,"XLink.AA.1"] <-
+        dt[dt$Acc.1==protein,"XLink.AA.1"] + shift
+    dt[dt$Acc.2==protein,"XLink.AA.2"] <-
+        dt[dt$Acc.2==protein,"XLink.AA.2"] + shift
+    dt <- populateModules(dt, object@modulFile)
+    dt <- calculatePairs(dt)
+    if (is.data.frame(object@caTracedPDB)) {
+        dt <- measureDistances(dt,object@caTracedPDB,object@chainMap)
+    }
+    return(dt)
 }
-)
-
-setMethod("renumberProtein", "PPsearchCompareXL",
-          function(object, protein, shift){
-              dt <- object@dataTable
-              dt[dt$Acc.1==protein,"XLink.AA.1"] <-
-                  dt[dt$Acc.1==protein,"XLink.AA.1"] + shift
-              dt[dt$Acc.2==protein,"XLink.AA.2"] <-
-                  dt[dt$Acc.2==protein,"XLink.AA.2"] + shift
-              dt <- populateModules(dt, object@modulFile)
-              dt <- calculatePairs(dt)
-              if (is.data.frame(object@caTracedPDB)) {
-                  dt <- measureDistances(dt,object@caTracedPDB,object@chainMap)
-              }
-              object@dataTable <- dt
-              return(object)
-          }
-)
-
-
-setGeneric("compareTwo", function(data1, data2) {
-    standardGeneric("compareTwo")
-}
-)
-
-setMethod("compareTwo", "PPsearchCompareXL",
-          function(data1, data2){
-              #Check that reduction state of two dataTables is the same...
-              #Maybe several different methods for doing the comparison:
-              if ((data1@reductionState != "xlinkedResPairs") | 
-                  (data2@reductionState != "xlinkedResPairs")) {
-                  stop("This function only works on xlinkedResPair")
-              }
-              columnsToKeep <- c("xlinkedResPair","XLink.AA.1","Acc.1",
-                                 "Modul.1","XLink.AA.2","Acc.2","Modul.2",
-                                 "Score.Diff","Xlinker","num","distance")
-              dt2 <- data2@dataTable[,columnsToKeep]
-              dt1 <- data1@dataTable[,columnsToKeep]
-              dt3 <- merge(dt1,dt2,by=columnsToKeep[1:7],all=T)
-              dt3$Score.Diff <- apply(dt3[,c("Score.Diff.x","Score.Diff.y")],1, max, na.rm=T)
-              dt3$distance <- apply(dt3[,c("distance.x","distance.y")],1, mean, na.rm=T)
-#              dt3$num.x[is.na(dt3$num.x)] <- 1
-#              dt3$num.y[is.na(dt3$num.y)] <- 1
-#              dt3$num <- log(dt3$num.x / dt3$num.y, 2)
-#              dt3$num <- scale(dt3$num)
-              dt3$num.x[is.na(dt3$num.x)] <- 0
-              dt3$num.y[is.na(dt3$num.y)] <- 0
-              dt3$num <- dt3$num.x + dt3$num.y
-              dt3 <- dt3[,-c(8:15)]
-              data1@dataTable <- dt3
-              return(data1)
-          }
-)
 
 
 
@@ -761,21 +531,7 @@ removeModule <- function(datTab, modules) {
     return(datTab)
 }
 
-setGeneric("parseCrosslinker", function(object) {
-    standardGeneric("parseCrosslinker")
-}
-)
-
-setMethod("parseCrosslinker", "PPsearchCompareXL",
-          function(object){
-              datTab <- object@dataTable
-              datTab <- .parseCrosslinker(datTab)
-              object@dataTable <- datTab
-              return(object)
-          }
-)
-
-.parseCrosslinker <- function(datTab) {
+parseCrosslinker <- function(datTab) {
     datTab$Xlinker <- "BS3"
     datTab[grepl("\\:2H\\(12\\)",datTab$Peptide.1) | 
                grepl("\\:2H\\(12\\)",datTab$Peptide.2),"Xlinker"] <- "BS3hvy"
@@ -783,44 +539,34 @@ setMethod("parseCrosslinker", "PPsearchCompareXL",
     return(datTab)
 }
 
-setGeneric("buildClassifier", function(object) {
-    standardGeneric("buildClassifier")
+buildClassifier <- function(datTab) {
+    datTab$massError <- abs(datTab$ppm)
+    ind <- sample(nrow(datTab),nrow(datTab)/2)
+    train <- datTab[ind,]
+    test <- datTab[-1 * ind,]
+    params <- c("Score.Diff", "percMatch","z","Score","numCSM","massError", "Rk.2","Rk.1")
+    wghts <- numeric(0)
+    wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
+    wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
+    fit <- svm(train$Decoy2 ~., 
+               subset(train, select=params),
+               kernel="linear",
+               cost=0.01,
+               tolerance=0.01,
+               class.weights=wghts
+    )
+    p <- predict(fit, subset(datTab,select=params),decision.values=T)
+    datTab$dvals <- as.numeric(attr(p,"decision.values"))
+    print(paste("training weights:", round(wghts,2)))
+    tab <- table(datTab$Decoy2, datTab$dvals > 0)
+    if (tab[1] < tab[3]) {
+        datTab$dvals <- -1 * datTab$dvals
+        tab <- table(datTab$Decoy2, datTab$dvals > 0)
+    }
+    print(tab)
+    print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
+    return(datTab)
 }
-)
-
-setMethod("buildClassifier", "PPsearchCompareXL",
-          function(object){
-              require(e1071)
-              datTab <- object@dataTable
-              datTab$massError <- abs(datTab$ppm)
-              ind <- sample(nrow(datTab),nrow(datTab)/2)
-              train <- datTab[ind,]
-              test <- datTab[-1 * ind,]
-              params <- c("Score.Diff", "percMatch","z","Score","numCSM","massError", "Rk.2","Rk.1")
-              wghts <- numeric(0)
-              wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
-              wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
-              fit <- svm(train$Decoy2 ~., 
-                         subset(train, select=params),
-                         kernel="linear",
-                         cost=0.01,
-                         tolerance=0.01,
-                         class.weights=wghts
-              )
-              p <- predict(fit, subset(datTab,select=params),decision.values=T)
-              datTab$dvals <- as.numeric(attr(p,"decision.values"))
-              print(paste("training weights:", round(wghts,2)))
-              tab <- table(datTab$Decoy2, datTab$dvals > 0)
-              if (tab[1] < tab[3]) {
-                  datTab$dvals <- -1 * datTab$dvals
-                  tab <- table(datTab$Decoy2, datTab$dvals > 0)
-              }
-              print(tab)
-              print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
-              object@dataTable <- datTab
-              return(object)
-          }
-)
 
 setGeneric("makeFilteredPeaklists", function(object, inputPeaklistDir, outputPeaklistDir) {
     standardGeneric("makeFilteredPeaklists")
@@ -914,43 +660,15 @@ formatXLTable <- function(datTab) {
                -massError, 
                -xlinkedPepPair)
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
-    datTab <- datTab %>% select(selected,
-                                link,
-                                xlinkedResPair, 
-                                SVM.score, 
-                                distance,
-                                m.z,
-                                z,
-                                ppm,
-                                DB.Peptide.1,
-                                DB.Peptide.2,
-                                Score,
-                                Score.Diff,
-                                Sc.1,
-                                Rk.1,
-                                Sc.2,
-                                Rk.2,
-                                Acc.1,
-                                XLink.AA.1,
-                                Protein.1,
-                                Modul.1,
-                                Species.1,
-                                Acc.2,
-                                XLink.AA.2,
-                                Protein.2,
-                                Modul.2,
-                                Species.2,
-                                xlinkClass,
-                                percMatch,
-                                Len.Pep.1,
-                                Len.Pep.2,
-                                Peptide.1,
-                                Peptide.2,
-                                Elemental.Composition,
-                                Fraction,
-                                RT,
-                                Spectrum,
-                                MSMS.Info)
+    datTab <- datTab %>% select(any_of(c("selected", "link", "xlinkedResPair", 
+                                "SVM.score", "distance", "m.z", "z", "ppm",
+                                "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
+                                "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
+                                "XLink.AA.1", "Protein.1", "Modul.1", "Species.1",
+                                "Acc.2", "XLink.AA.2", "Protein.2", "Modul.2", "Species.2",
+                                "xlinkClass", "percMatch", "Len.Pep.1", "Len.Pep.2",
+                                "Peptide.1", "Peptide.2", "Elemental.Composition",
+                                "Fraction", "RT", "Spectrum", "MSMS.Info")))
     return(datTab)
 }
 
@@ -1475,7 +1193,6 @@ bestResPairHackDT <- function(datTab, classifier=dvals){
         ungroup()
     return(datTabR)
 }
-
 
 getRandomCrosslinks <- function(pdbFile, numCrosslinks) {
     pdbFile <- pdbFile[pdbFile$resid=="LYS",]
