@@ -1,12 +1,12 @@
 function(input, output, session) {
     options(shiny.maxRequestSize=1000*1024^2)
 
-    exDir = c(wd= './transloconDemo')
+    exDir = c(wd= './DemoFiles')
     shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
     shinyFileChoose(input, "moduleFile", roots=exDir, filetypes=c('', 'txt'))
     shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
     shinyFileChoose(input, "chainMapFile", roots=exDir, filetypes=c('', 'txt'))
-    
+
     output$clmsDataFile <- renderPrint({
       if (is.integer(input$clmsData)) {
         cat("No file selected")
@@ -14,7 +14,7 @@ function(input, output, session) {
         cat(parseFilePaths(exDir, input$clmsData)$name)
       }
     })
-    
+
     output$modFile <- renderPrint({
       if (is.integer(input$moduleFile)) {
         cat("No file selected")
@@ -32,7 +32,7 @@ function(input, output, session) {
         consoleMessage("*** Reading Protein Structure File ***")
       }
     })
-    
+
     output$chainFile <- renderPrint({
       if (is.integer(input$chainMapFile)) {
         cat("No file selected")
@@ -41,7 +41,7 @@ function(input, output, session) {
         consoleMessage("*** Reading Chainmap File ***")
       }
     })
-    
+
     pdbTab <- reactive({
       if (!is.integer(input$pdbID)) {
         inFile <- parseFilePaths(exDir, input$pdbID)
@@ -56,35 +56,50 @@ function(input, output, session) {
       }
     })
 
-    csmTab <- reactive({
-      if (!is.integer(input$clmsData) & !is.integer(input$moduleFile)) {
+    modTab <- reactive({
+      if (!is.integer(input$moduleFile)) {
+        inFile <- parseFilePaths(exDir, input$moduleFile)
+        print("populate modules")
+        return(readModuleFile(inFile$datapath))
+      }
+    })
+
+    observe({
+      if (!is.null(modTab())) {
+        scRes(populateModules(scRes(), modTab()))
+      }
+    })
+
+    scRead <- reactive({
+      if (!is.integer(input$clmsData)) {
         inFile <- parseFilePaths(exDir, input$clmsData)
-        modFile <- parseFilePaths(exDir, input$moduleFile)
         consoleMessage("*** Loading Search Compare File ***")
-        datTab <- new(Class="PPsearchCompareXL",
-                      dataFile=inFile$datapath,
-                      modFile=modFile$datapath,
-                      #preProcessFunction=nameAccSwap,
-                      chainMapFile=chainTab(),
-                      pdbFile=pdbTab())
+        scRes <- readProspectorXLOutput(inFile$datapath)
         consoleMessage("*** Building SVM Classifier ***")
-        datTab <- buildClassifier(datTab)
-        datTab <- getSearchTable(datTab)
-        if (!"Spectrum" %in% names(datTab)) {
-          datTab$Spectrum <- 1
-        }
+        scRes <- buildClassifier(scRes)
+        return(scRes)
+      }
+    })
+
+    scRes <- reactiveVal()
+    observe({scRes(scRead())}) 
+    
+    
+    consoleMessage <- reactiveVal("")
+    output$consoleOut <- renderText({
+      consoleMessage()
+    })
+    
+    csmTab <- reactive({
+      if (!is.null(scRes())) {
+        datTab <- scRes()
+        # The links should be generated in touchStone upon reading the SC file:
         datTab <- datTab %>%
           mutate(link = pmap_chr(
             list(Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
         datTab <- generateCheckBoxes(datTab)
         return(datTab)
       }
-    })
-    
-    consoleMessage <- reactiveVal("")
-    
-    output$consoleOut <- renderText({
-      consoleMessage()
     })
     
     clTab <- reactive({
@@ -124,8 +139,7 @@ function(input, output, session) {
     xlTable <- reactive({
       if (is.null(csmTab())) return(NULL)
       tabLevelFiltered() %>% 
-        filter(Decoy=="Target",
-               dvals >= input$svmThreshold)
+        filter(Decoy=="Target", dvals >= input$svmThreshold)
     })
     
     output$numberClassedLinks <- renderText({
@@ -146,19 +160,20 @@ function(input, output, session) {
              "%"
       )
     })
-    
+
     output$FDRplot <- renderPlot({
       if (is.null(tabLevel())) return(NULL)
       fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
     })
-
+    
     randomDists <- reactive({
-#        consoleMessage("*** geting random Lys-Lys distances ***")
-        getRandomCrosslinks(pdbTab(), 5000)
+      #        consoleMessage("*** geting random Lys-Lys distances ***")
+      if (is.null(pdbTab())) return(NULL)
+      getRandomCrosslinks(pdbTab(), 5000)
     })
-
+    
     targetDists <- reactive({
-      if (is.null(csmTab())) return(NULL)
+      if (is.null(pdbTab())) return(NULL)
       tabLevelFiltered() %>% 
         filter(Decoy=="Target", dvals >= input$svmThreshold, !is.na(distance)) %>%
         pull(distance)
@@ -169,6 +184,7 @@ function(input, output, session) {
     })
 
     VR <- reactive({
+      if (is.null(pdbTab())) return(NULL)
         sum(targetDists() > input$distanceThreshold) / length(targetDists())
     })
 

@@ -1,6 +1,6 @@
 fluidPage(
-#    tags$head(tags$style(HTML(".shiny-text-output {background-color:#fff;}
-#                              hr {border-top: 0.5px solid #000000;}"))),
+    #    tags$head(tags$style(HTML(".shiny-text-output {background-color:#fff;}
+    #                              hr {border-top: 0.5px solid #000000;}"))),
     titlePanel("ProspectorX Demo"),
     div(img(src="UCSF_logo_navy_RGB.png", height="75px"),
         styles="text-align: right"),
@@ -16,7 +16,7 @@ fluidPage(
                  sidebarLayout(
                      sidebarPanel(width = 3,
                                   h3("File Selection"),
-                                  h4("CLMS Data - Prospector Search Compare Output"),
+                                  h4("Prospector Search Compare Output"),
                                   column(4, style='padding:0px; margin:0px',
                                          shinyFilesButton("clmsData", "Browse...",
                                                           "Select the search compare crosslink output",
@@ -58,10 +58,10 @@ fluidPage(
                                   ),
                                   selectInput("summaryLevel", label = h4("Summarization Level"),
                                               choices = list("CSMs",
-                                                             "Unique Residue Pairs",
-                                                             "Protein Pairs",
-                                                             "Domains",
-                                                             "Modules")
+                                                             "Unique Residue Pairs")#,
+                                              # "Protein Pairs",
+                                              # "Domains",
+                                              # "Modules")
                                   ),
                                   tags$hr(),
                                   fluidRow(
@@ -97,12 +97,12 @@ fluidPage(
                                     plotOutput("FDRplot")
                              ),
                              column(4,
-                                    verbatimTextOutput("VR"),
-                                    plotOutput("distancePlot")
-                             ),
-                             column(4,
                                     verbatimTextOutput("meanError"),
                                     plotOutput("massErrorPlot")
+                             ),
+                             column(4,
+                                    verbatimTextOutput("VR"),
+                                    plotOutput("distancePlot")
                              )
                          ),
                          fluidRow(
