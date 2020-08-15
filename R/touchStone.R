@@ -30,8 +30,7 @@ readProspectorXLOutput <- function(inputFile){
     return(dataTable)
 }
 
-bestResPair <- function(datTab, classifier=c("Score.Diff","Score",
-                                             "MSMS.Info")){
+bestResPair <- function(datTab, classifier=c("Score.Diff", "Score", "MSMS.Info")) {
     datTabR <- datTab
     xlinks <- unique(datTab$xlinkedResPair)
     for (param in classifier) {
@@ -435,20 +434,18 @@ renumberProtein <-function(dt, protein, shift) {
     return(dt)
 }
 
-
-
-setGeneric("pairPlot", function(object, color="lightseagreen",
-                                removeMods=NA_character_, displayEmpty=T) {
-    standardGeneric("pairPlot")
-}
-)
-
-setMethod("pairPlot", "PPsearchCompareXL",
-          function(object, color, removeMods, displayEmpty){
-              .pairPlot(object@dataTable, object@modulFile, color, 
-                        removeMods, displayEmpty)
-          }
-)
+# setGeneric("pairPlot", function(object, color="lightseagreen",
+#                                 removeMods=NA_character_, displayEmpty=T) {
+#     standardGeneric("pairPlot")
+# }
+# )
+# 
+# setMethod("pairPlot", "PPsearchCompareXL",
+#           function(object, color, removeMods, displayEmpty){
+#               .pairPlot(object@dataTable, object@modulFile, color, 
+#                         removeMods, displayEmpty)
+#           }
+# )
 
 .rejiggerMods <- function(modTab) {
     #modTab <- lapply(modTab, function(x) x[-nrow(x),])
@@ -568,30 +565,30 @@ buildClassifier <- function(datTab) {
     return(datTab)
 }
 
-setGeneric("makeFilteredPeaklists", function(object, inputPeaklistDir, outputPeaklistDir) {
-    standardGeneric("makeFilteredPeaklists")
-}
-)
-
-setMethod("makeFilteredPeaklists", "PPsearchCompareXL",
-          function(object, inputPeaklistDir, outputPeaklistDir){
-              cwd <- getwd()
-              setwd(inputPeaklistDir)
-              datTab <- object@dataTable
-              fileNames <- unique(datTab$Fraction)
-              for (file in fileNames) {
-                  subTab <- datTab[datTab$Fraction == file,"MSMS.Info"]
-                  spectra <- sapply(subTab, extractSpecFromMGFpd, file)
-                  outFileName <- paste(outputPeaklistDir, "/", file, sep="")
-                  spectra <- spectra[order(subTab)]
-                  cat(spectra, file=outFileName, sep="\n")
-              }
-              datTab <- formatMSViewerFile(datTab)
-              outFileName <- paste(outputPeaklistDir, "/", "filteredPeakList.txt", sep="")
-              write.table(datTab,outFileName,sep="\t",quote=F,row.names=F)
-              setwd(cwd)
-          }
-)
+# setGeneric("makeFilteredPeaklists", function(object, inputPeaklistDir, outputPeaklistDir) {
+#     standardGeneric("makeFilteredPeaklists")
+# }
+# )
+# 
+# setMethod("makeFilteredPeaklists", "PPsearchCompareXL",
+#           function(object, inputPeaklistDir, outputPeaklistDir){
+#               cwd <- getwd()
+#               setwd(inputPeaklistDir)
+#               datTab <- object@dataTable
+#               fileNames <- unique(datTab$Fraction)
+#               for (file in fileNames) {
+#                   subTab <- datTab[datTab$Fraction == file,"MSMS.Info"]
+#                   spectra <- sapply(subTab, extractSpecFromMGFpd, file)
+#                   outFileName <- paste(outputPeaklistDir, "/", file, sep="")
+#                   spectra <- spectra[order(subTab)]
+#                   cat(spectra, file=outFileName, sep="\n")
+#               }
+#               datTab <- formatMSViewerFile(datTab)
+#               outFileName <- paste(outputPeaklistDir, "/", "filteredPeakList.txt", sep="")
+#               write.table(datTab,outFileName,sep="\t",quote=F,row.names=F)
+#               setwd(cwd)
+#           }
+# )
 
 formatMSViewerFile <- function(datTab) {
     require(stringr)
