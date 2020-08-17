@@ -14,7 +14,7 @@ function(input, output, session) {
         cat(parseFilePaths(exDir, input$clmsData)$name)
       }
     })
-
+    
     output$modFile <- renderPrint({
       if (is.integer(input$moduleFile)) {
         cat("No file selected")
