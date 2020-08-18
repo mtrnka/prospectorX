@@ -1,4 +1,4 @@
-#print("touchStone module loaded")
+print("touchStone module loaded")
 
 readProspectorXLOutput <- function(inputFile){
     dataTable <- read_tsv(inputFile)
@@ -109,6 +109,7 @@ readChainMap <- function(chainFile) {
 
 parsePDB <- function(pdbAcc) {
     require(bio3d)
+    print("***parsePDB***")
     if (grepl("\\.cif$",pdbAcc)) {
         struct <- read.cif(pdbAcc)
     } else if (grepl("\\.pdb$",pdbAcc)) {
@@ -156,6 +157,7 @@ multiEuclideanDistance <- function(parsedPDB, residue1, chain1, residue2, chain2
 
 measureDistances <- function(searchTable, parsedPDB, chainMap) {
 #    searchTable <- searchTable[searchTable$Decoy == "Target",]
+    print("***measureDistances***")
     chainLookup <- function(proteinName) {
         if (grepl("r[0-9]\\_",proteinName)) {
             return ("Dec")
@@ -183,6 +185,7 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
 }
 
 populateModules <- function(searchTable, moduleDefinitions) {
+    print("***populate Modules***")
     modules <- list(moduleDefinitions)
     pep1.modul <- mapply(
         assignModule,
@@ -230,8 +233,8 @@ calculateDecoys <- function(searchTable) {
 }
 
 calculatePairs <- function(searchTable){
-    searchTable$Res.1 <- paste(searchTable$XLink.AA.1, searchTable$Protein.1, sep=".")
-    searchTable$Res.2 <- paste(searchTable$XLink.AA.2, searchTable$Protein.2, sep=".")
+    searchTable$Res.1 <- paste(searchTable$XLink.AA.1, searchTable$Acc.1, sep=".")
+    searchTable$Res.2 <- paste(searchTable$XLink.AA.2, searchTable$Acc.2, sep=".")
     searchTable$xlinkedResPair <- ifelse(searchTable$Res.1 <= searchTable$Res.2, 
                                          paste(searchTable$Res.1, searchTable$Res.2, sep="::"),
                                          paste(searchTable$Res.2, searchTable$Res.1, sep="::"))
@@ -794,7 +797,7 @@ processMS3xlinkResults <- function(ms3SearchTable,
               chainMapFile=chainMapFile
     )
     t1@dataTable <- ms3crosslinksFlat
-    t1@dataTable <- measureDistances(t1@dataTable, t1@caTracedPDB, t1@chainMap)
+    t1@dataTable <- nces(t1@dataTable, t1@caTracedPDB, t1@chainMap)
     t1@dataTable <- populateModules(t1@dataTable, t1@modulFile)
     t1@dataTable <- calculateDecoys(t1@dataTable)
     return(t1)

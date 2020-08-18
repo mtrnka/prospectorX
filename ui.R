@@ -5,7 +5,7 @@ fluidPage(
     div(img(src="UCSF_logo_navy_RGB.png", height="75px"),
         styles="text-align: right"),
     br(),
-    
+   
     navbarPage(
         title=#div(img(src="UCSF_logo_navy_RGB.png", height="30px"), 
             "prospectorX-touchstone", 
@@ -16,45 +16,45 @@ fluidPage(
                  sidebarLayout(
                      sidebarPanel(width = 3,
                                   h3("File Selection"),
-                                  h4("Prospector Search Compare Output"),
+                                  h4("Search Compare XL Output"),
                                   column(4, style='padding:0px; margin:0px',
                                          shinyFilesButton("clmsData", "Browse...",
                                                           "Select the search compare crosslink output",
                                                           multiple = F, viewtype = "detail")
                                   ),
                                   column(8, style='padding:0px; margin:0px',
-                                         verbatimTextOutput("clmsDataFile"),
-                                         tags$style(type = 'text/css', '#clmsDataFile {white-space:pre-wrap; padding:7px;}')
+                                         verbatimTextOutput("clmsDataFileName"),
+                                         tags$style(type = 'text/css', '#clmsDataFileName {white-space:pre-wrap; padding:7px;}')
                                   ),
                                   h4("Module File"),
                                   column(4, style='padding:0px; margin:0px',
-                                         shinyFilesButton("moduleFile", "Browse...",
+                                         shinyFilesButton("modules", "Browse...",
                                                           "Select the module file",
                                                           multiple = F, viewtype = "detail")
                                   ),
                                   column(8, style='padding:0px; margin:0px',
-                                         verbatimTextOutput("modFile"),
-                                         tags$style(type = 'text/css', '#modFile {white-space:pre-wrap; padding:7px;}')
+                                         verbatimTextOutput("moduleFileName"),
+                                         tags$style(type = 'text/css', '#moduleFileName {white-space:pre-wrap; padding:7px;}')
                                   ),
-                                  h4("PDB File"),
+                                  h4("PDB ID"),
                                   column(4, style='padding:0px; margin:0px',
                                          shinyFilesButton("pdbID", "Browse...",
                                                           "Select the pdb/cif file",
                                                           multiple = F, viewtype = "detail")
                                   ),
                                   column(8, style='padding:0px; margin:0px',
-                                         verbatimTextOutput("pdbTabFile"),
-                                         tags$style(type = 'text/css', '#pdbTabFile {white-space:pre-wrap; padding:7px;')
+                                         verbatimTextOutput("pdbFileName"),
+                                         tags$style(type = 'text/css', '#pdbFileName {white-space:pre-wrap; padding:7px;')
                                   ),
                                   h4("Chainmap File"),
                                   column(4, style='padding:0px; margin:0px',
-                                         shinyFilesButton("chainMapFile", "Browse...",
+                                         shinyFilesButton("chainmap", "Browse...",
                                                           "Select the chainmap file",
                                                           multiple = F, viewtype = "detail")
                                   ),
                                   column(8, style='padding:0px; margin:0px',
-                                         verbatimTextOutput("chainFile"),
-                                         tags$style(type = 'text/css', '#chainFile {white-space:pre-wrap; padding:7px;}')
+                                         verbatimTextOutput("chainmapFileName"),
+                                         tags$style(type = 'text/css', '#chainmapFileName {white-space:pre-wrap; padding:7px;}')
                                   ),
                                   selectInput("summaryLevel", label = h4("Summarization Level"),
                                               choices = list("CSMs",
