@@ -71,31 +71,31 @@ reduceTo <- function(datTab, category, classifier) {
     return(outTab)
 }
 
-readModuleFile <- function(modFile) {
-    inFile <- file(modFile, open="r")
-    header <- readLines(inFile, n=1)
-    header <- lineSplit(header)
-    dataTable <- character(5)
-    while (T) {
-        line <- readLines(inFile, n=1)
-        if (length(line)==0) {break}
-        line <- lineSplit(line)
-        if (length(line)==0) {break}
-        else if (length(line) < 5) {length(line)=5}
-        dataTable <- rbind(dataTable,line)}
-    close(inFile)
-    row.names(dataTable) <- NULL
-    dataTable <- as.data.frame(dataTable[-1,],stringsAsFactors=F)
-    names(dataTable) <- header
-    dataTable <- cleanTypes(dataTable)
-    modules <- list()
-    for (subunit in unique(dataTable$Subunit)) {
-        conv <- dataTable[dataTable$Subunit==subunit,
-                          c("Range_low","Range_high","Module")]
-        modules[[subunit]] <- conv[order(conv$Range_low),]
-    }
-    return(modules)
-}
+# readModuleFile <- function(modFile) {
+#     inFile <- file(modFile, open="r")
+#     header <- readLines(inFile, n=1)
+#     header <- lineSplit(header)
+#     dataTable <- character(5)
+#     while (T) {
+#         line <- readLines(inFile, n=1)
+#         if (length(line)==0) {break}
+#         line <- lineSplit(line)
+#         if (length(line)==0) {break}
+#         else if (length(line) < 5) {length(line)=5}
+#         dataTable <- rbind(dataTable,line)}
+#     close(inFile)
+#     row.names(dataTable) <- NULL
+#     dataTable <- as.data.frame(dataTable[-1,],stringsAsFactors=F)
+#     names(dataTable) <- header
+#     dataTable <- cleanTypes(dataTable)
+#     modules <- list()
+#     for (subunit in unique(dataTable$Subunit)) {
+#         conv <- dataTable[dataTable$Subunit==subunit,
+#                           c("Range_low","Range_high","Module")]
+#         modules[[subunit]] <- conv[order(conv$Range_low),]
+#     }
+#     return(modules)
+# }
 
 readChainMap <- function(chainFile) {
     chainMap <- read.table(chainFile,header=F,sep="\t",stringsAsFactors=F)
@@ -177,43 +177,56 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
         chains1,
         searchTable$XLink.AA.2,
         chains2)
-#    naValues <- is.na(distance)
-#    return(data.frame(dvals=searchTable$dvals[!naValues], distance=distance[!naValues]))
     searchTable$distance <- distance
     print("*** measured distances on pdb file ***")
     return(searchTable)
 }
 
-populateModules <- function(searchTable, moduleDefinitions) {
-    print("***populate Modules***")
-    modules <- list(moduleDefinitions)
-    pep1.modul <- mapply(
-        assignModule,
-        searchTable$XLink.AA.1,
-        searchTable$Acc.1,
-        modules)
-    pep2.modul <- mapply(
-        assignModule,
-        searchTable$XLink.AA.2,
-        searchTable$Acc.2,
-        modules)
-    levs <- unlist(sapply(moduleDefinitions, function(x) c(x[3])))
-    names(levs) <- NULL
-    levs <- unique(levs)
-    searchTable$Modul.1 <- factor(unlist(pep1.modul),levels=levs)
-    searchTable$Modul.2 <- factor(unlist(pep2.modul),levels=levs)
-    return(searchTable)
-}
+# populateModules <- function(searchTable, moduleDefinitions) {
+#     print("***populate Modules***")
+#     modules <- list(moduleDefinitions)
+#     pep1.modul <- mapply(
+#         assignModule,
+#         searchTable$XLink.AA.1,
+#         searchTable$Acc.1,
+#         modules)
+#     pep2.modul <- mapply(
+#         assignModule,
+#         searchTable$XLink.AA.2,
+#         searchTable$Acc.2,
+#         modules)
+#     levs <- unlist(sapply(moduleDefinitions, function(x) c(x[3])))
+#     names(levs) <- NULL
+#     levs <- unique(levs)
+#     searchTable$Modul.1 <- factor(unlist(pep1.modul),levels=levs)
+#     searchTable$Modul.2 <- factor(unlist(pep2.modul),levels=levs)
+#     return(searchTable)
+# }
+# 
+# assignModule <- function(seqPosition,protein,modList) {
+#     if (protein %in% names(modList)) {
+#         n <- findInterval(as.integer(seqPosition),
+#                           modList[[as.character(protein)]]$Range_low)
+#         if (n != 0) {
+#             return(modList[[protein]]$Module[n])
+#         } else return(NA)
+#     }
+#     else return(NA)
+# }
 
-assignModule <- function(seqPosition,protein,modList) {
-    if (protein %in% names(modList)) {
-        n <- findInterval(as.integer(seqPosition),
-                          modList[[as.character(protein)]]$Range_low)
-        if (n != 0) {
-            return(modList[[protein]]$Module[n])
-        } else return(NA)
-    }
-    else return(NA)
+assignModules <- function(searchTable, moduleFile) {
+    modTab <- read_tsv(moduleFile)
+    Modul.1 <- searchTable %>% 
+        left_join(modTab, by=c("Acc.1"="Subunit")) %>%
+        filter(is.na(Range_low) | (XLink.AA.1 >= Range_low & XLink.AA.1 <= Range_high)) %>%
+        pull("Module")
+    Modul.2 <- searchTable %>% 
+        left_join(modTab, by=c("Acc.2"="Subunit")) %>%
+        filter(is.na(Range_low) | (XLink.AA.2 >= Range_low & XLink.AA.2 <= Range_high)) %>%
+        pull("Module")
+    searchTable$Modul.1 <- as_factor(Modul.1)
+    searchTable$Modul.2 <- as_factor(Modul.2)
+    return(searchTable)
 }
 
 calculateDecoys <- function(searchTable) {
@@ -296,7 +309,7 @@ cleanTypes <- function(dataTable) {
         stringsAsFactors=FALSE))
 }
 
-calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFactor=5) {
+calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFactor=10) {
     datTab <- datTab[datTab[[classifier]] >= threshold, ]
     fdrTable <- table(datTab$Decoy)
     if (is.na(fdrTable["DoubleDecoy"])) {fdrTable["DoubleDecoy"] <- 0}
@@ -1015,7 +1028,7 @@ compareFDRs <- function(datTab, classifier="dvals", scalingFactor=10, ...) {
 }
 
 
-fdrPlots <- function(datTab, scalingFactor = 5, cutoff = 0, classifier="dvals") {
+fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals") {
     datTab <- as.data.frame(datTab)
     # if (classifier=="dvals") {
     #     stepSize = 0.5
@@ -1048,7 +1061,7 @@ fdrPlots <- function(datTab, scalingFactor = 5, cutoff = 0, classifier="dvals") 
     plot(decoyHist, add=T, col="salmon")
     plot(doubleDecoyHist, add=T, col="goldenrod1")
     abline(v=cutoff, lwd=4, lt=2, col="red")
-    legend("right", c("Tar-Tar", "Tar-Dec", "Dec-Dec"), 
+    legend("topright", c("Tar-Tar", "Tar-Dec", "Dec-Dec"), 
            fill = c("lightblue", "salmon", "goldenrod1"),
            bty="n")
 }    

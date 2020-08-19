@@ -84,7 +84,7 @@ function(input, output, session) {
 
   observeEvent(req(moduleFile()), {
     consoleMessage("*** Assigning Modules ***")
-    scResults(populateModules(scResults(), readModuleFile(moduleFile())))
+    scResults(assignModules(scResults(), moduleFile()))
   })
 
   observeEvent(req(chainmapFile(), pdbFile()), {
