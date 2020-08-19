@@ -291,16 +291,16 @@ scoreFilter <- function(searchTable, minScore=0) {
     return(searchTable)
 }
 
-lineSplit <- function(line) {
-    l <- nchar(line)
-    g <- gregexpr("\t",line)[[1]]
-    gl <- g[length(g)]
-    if (l == gl) {
-        return(c(unlist(strsplit(line,"\t")),""))
-    } else {
-        return(unlist(strsplit(line,"\t")))
-    }
-}
+# lineSplit <- function(line) {
+#     l <- nchar(line)
+#     g <- gregexpr("\t",line)[[1]]
+#     gl <- g[length(g)]
+#     if (l == gl) {
+#         return(c(unlist(strsplit(line,"\t")),""))
+#     } else {
+#         return(unlist(strsplit(line,"\t")))
+#     }
+# }
 
 cleanTypes <- function(dataTable) {
     return(as.data.frame(
@@ -1194,7 +1194,6 @@ massErrorPlot <- function(massErrors, lowThresh, highThresh, lowPlotRange, highP
     abline(v = c(lowThresh, highThresh), lwd = 4, lt = 2, col = "red")
 }
 
-
 distancePlot <- function(targetDists, randomDists, threshold) {
     targetDists.size <- length(!is.na(targetDists))
     randomDists.size <- length(!is.na(randomDists))
@@ -1210,7 +1209,7 @@ distancePlot <- function(targetDists, randomDists, threshold) {
          main = "Crosslink Violations")
     plot(dists, col=col2, add=T)
     abline(v=threshold, lwd=4, lt=2, col="orangered")
-    legend("right", c("experimental", "random distribution"), fill = c(col2, col1),
+    legend("topright", c("experimental", "random distribution"), fill = c(col2, col1),
            bty="n")
 }
 
