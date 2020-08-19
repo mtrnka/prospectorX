@@ -100,6 +100,14 @@ function(input, output, session) {
         mutate(link = pmap_chr(
           list(Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
       datTab <- generateCheckBoxes(datTab)
+      minPPM = mfloor(min(datTab$ppm, na.rm=T))
+      maxPPM = mfloor(max(datTab$ppm, na.rm=T))
+      updateSliderInput(session, "ms1MassError", value = c(minPPM, maxPPM),
+                        min = minPPM, max = maxPPM)
+      minSVM = mfloor(min(datTab$dvals, na.rm=T), 1)
+      maxSVM = mfloor(max(datTab$dvals, na.rm=T), 1)
+      updateSliderInput(session, "svmThreshold", value = 0,
+                        min = minSVM, max = maxSVM)
       return(datTab)
   })
 
@@ -119,21 +127,9 @@ function(input, output, session) {
   tabLevelFiltered <- reactive({
     req(csmTab())
     tabLevel() %>% filter(Score.Diff >= input$scoreDiffThreshold,
-                          Len.Pep.1 >= input$peptideLengthFilter,
-                          Len.Pep.2 >= input$peptideLengthFilter,
-                          ppm >= input$ms1MassError[1],
-                          ppm <= input$ms1MassError[2])
-  })
-  
-  observeEvent(input$resetFilters, {
-    updateSliderInput(session, "ms1MassError",
-                      min = floor(min(tabLevel()$ppm, na.rm=T)),
-                      max = ceiling(max(tabLevel()$ppm, na.rm=T))
-    )
-    updateSliderInput(session, "svmThreshold", 
-                      min = floor(min(tabLevel()$dvals)),
-                      max = ceiling(max(tabLevel()$dvals))
-    )
+                          between(Len.Pep.1, input$peptideLengthFilter[1], input$peptideLengthFilter[2]),
+                          between(Len.Pep.2, input$peptideLengthFilter[1], input$peptideLengthFilter[2]),
+                          between(ppm, input$ms1MassError[1], input$ms1MassError[2]))
   })
   
   xlTable <- reactive({
@@ -165,6 +161,16 @@ function(input, output, session) {
     fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
   })
 
+  observeEvent(input$findThreshold, {
+    req(tabLevel())
+    threshold <- findThreshold(tabLevelFiltered(), targetER = input$targetFDR / 100)
+    print(threshold)
+    updateSliderInput(session, "svmThreshold", value = threshold[1])
+    output$thresholdPlot <- renderPlot({
+      findThreshold(tabLevelFiltered())
+    })
+  })
+  
   randomDists <- reactive({
     req(pdbFile())
     consoleMessage("*** geting random Lys-Lys distances ***")
@@ -211,6 +217,11 @@ function(input, output, session) {
   output$meanError <- renderText({
     req(tabLevel())
     paste0("mean error: ", round(mean(classedMassErrors(), na.rm=T),2), " ppm")
-  })    
-}
+  })
 
+  output$distanceSlider <- renderUI({
+    req(pdbFile(), targetDists())
+    sliderInput("distanceThreshold", "Violation Dist.", min = 0, max = 100,
+                step = 1, value = 30) 
+  })
+}

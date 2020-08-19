@@ -63,26 +63,31 @@ fluidPage(
                                               # "Domains",
                                               # "Modules")
                                   ),
+                                  column(4, style='padding:0px; margin:0px',
+                                         br(), br(),
+                                         actionButton("findThreshold", "Classify")
+                                  ),
+                                  column(8,
+                                         sliderInput("targetFDR", "Target FDR", min = 0, max = 25,
+                                                     step = 0.5, value = 1.0)
+                                  ),
                                   tags$hr(),
                                   fluidRow(
                                       column(6, 
-                                             sliderInput("svmThreshold", "SVM Threshold", min = -5, max = 15, 
+                                             sliderInput("svmThreshold", "Min. SVM Score", min = -5, max = 10, 
                                                          step = 0.1, value = 0),
-                                             actionButton("applyFilters", h5("Apply Filters")),
-                                             br(),br(),
-                                             sliderInput("scoreDiffThreshold", "Score.Diff Threshold", min = 0, max = 30,
+                                             br(),
+                                             sliderInput("scoreDiffThreshold", "Min. Score.Diff", min = 0, max = 30,
                                                          step = 0.5, value = 0),
                                              br(),
-                                             sliderInput("peptideLengthFilter", "Min Peptide Length", min = 3, max = 7,
-                                                         step = 1, value = 4)
+                                             sliderInput("peptideLengthFilter", "Peptide Length", min = 3, max = 35,
+                                                         step = 1, value = c(4, 25))
                                       ),
                                       column(6,
-                                             sliderInput("distanceThreshold", "Violation Distance", min = 0, max = 100,
-                                                         step = 1, value = 30),
-                                             actionButton("resetFilters", h5("Reset Filters")),
-                                             br(),br(),
                                              sliderInput("ms1MassError", "Prec Mass Error", min = -20, max = 20,
-                                                         step = 0.5, value = c(-5, 5))
+                                                         step = 0.5, value = c(-25, 25)),
+                                             br(),
+                                             uiOutput("distanceSlider")
                                       )
                                   )
                      ),
@@ -94,7 +99,8 @@ fluidPage(
                          fluidRow(
                              column(4,
                                     verbatimTextOutput("FDR"),
-                                    plotOutput("FDRplot")
+                                    plotOutput("FDRplot"),
+                                    plotOutput("thresholdPlot")
                              ),
                              column(4,
                                     verbatimTextOutput("meanError"),

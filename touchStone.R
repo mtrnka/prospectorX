@@ -24,7 +24,7 @@ readProspectorXLOutput <- function(inputFile){
     dataTable <- assignXLinkClass(dataTable)
     dataTable <- calculatePercentMatched(dataTable)
     dataTable <- calculatePeptideLengths(dataTable)
-    dataTable <- lengthFilter(dataTable, minLen = 3, maxLen = 25)
+    dataTable <- lengthFilter(dataTable, minLen = 3, maxLen = 35)
     dataTable <- scoreFilter(dataTable, minScore = 0)
     #Add stuff to remove useless columns from data table.
     return(dataTable)
@@ -296,7 +296,7 @@ cleanTypes <- function(dataTable) {
         stringsAsFactors=FALSE))
 }
 
-calculateFDR <- function(datTab, threshold=-100, scalingFactor=5, classifier="dvals") {
+calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFactor=5) {
     datTab <- datTab[datTab[[classifier]] >= threshold, ]
     fdrTable <- table(datTab$Decoy)
     if (is.na(fdrTable["DoubleDecoy"])) {fdrTable["DoubleDecoy"] <- 0}
@@ -319,52 +319,16 @@ calculateGT <- function(datTab, threshold=-100, classifier="dvals") {
     return(gt)
 }
 
-violationRate <- function(datTab, threshold, maxDistance = 35) {
-    datTab <- datTab[datTab$Decoy == "Target" & datTab$dvals >= threshold,]  
-    violTab <- table(datTab$distance > maxDistance)
-    viol <- violTab[2]
-    good <- violTab[1]
-    return(viol / (good + viol))
-}
-
-newVR <- function(threshold, datTab, classifier="Score.Diff") {
+violationRate <- function(datTab, threshold, classifier="Score.Diff", maxDistance = 35) {
     datTab <- datTab[datTab[[classifier]] >= threshold,]
     dists <- datTab$distance
     dists <- dists[!is.na(dists)]
-    nAbove <- sum(dists > 35)
-    nBelow <- sum(dists <= 35)
+    nAbove <- sum(dists > maxDistance)
+    nBelow <- sum(dists <=maxDistance)
     return(nAbove / (nAbove + nBelow))
 }
 
-findThreshold <- function(datTab, desiredVR=0.05, 
-                          classifier="Score.Diff",
-                          minThreshold=5) {
-    maxSD <- 25
-    sdRange <- seq(0, maxSD, by=0.5)
-    vrs <- unlist(lapply(sdRange, newVR, datTab, classifier))
-    vrDiff <- (vrs - desiredVR)
-    plot(vrs ~ sdRange, type="l")
-    vrCross <- logical(length(sdRange))
-    for (i in 1:(length(sdRange) - 1)) {
-        vrCross[i] <- vrDiff[i] > 0 & vrDiff[i+1] <= 0
-    }
-    if (sum(vrCross)==0 & vrDiff[1] < 0) {
-        threshold=minThreshold
-    } else if (sum(vrCross)==0 & vrDiff[1] > 0) {
-        threshold=maxSD
-        print("no acceptable threshold found")
-    } else {
-        firstCross <- which(vrCross)[1] + 1
-        threshold <- sdRange[firstCross]
-    }
-    if (threshold < minThreshold) {
-        threshold = minThreshold
-    }
-    abline(v=threshold, lwd=2, lt=2, col="red")
-    return(threshold)
-}
-
-findThreshold2 <- function(datTab, targetER=0.05, minThreshold=-5,
+findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
                           classifier="dvals", errorFUN= calculateFDR, ...) {
     class.max <- ceiling(max(datTab[[classifier]]))
     class.min <- floor(min(datTab[[classifier]]))
@@ -399,7 +363,7 @@ findThreshold2 <- function(datTab, targetER=0.05, minThreshold=-5,
         threshold = minThreshold
     }
     abline(v=threshold, lwd=2, lt=2, col="red")
-    return(threshold)
+    return(c(threshold, calculateFDR(datTab, threshold)))
 }
 
 removeDecoys <- function(datTab) {
@@ -912,120 +876,120 @@ processMS2xlinkResultsBoosted <- function(ms2searchResults, ms3searchTable, dev=
     return(ms2searchResults)
 }
 
-
-peptideGroups <- list(
-    Group1=c(
-        "SDKNR",
-        "KLINGIR",
-        "KFDNLTK",
-        "FIKPILEK",
-        "APLSASMIKR",
-        "NPIDFLEAKGYK",
-        "LPKYSLFELENGR",
-        "TEVQTGGFSKESILPK"),
-    Group2=c(
-        "VKYVTEGMR",
-        "FDNLTKAER",
-        "DFQFYKVR",
-        "YDENDKLIR",
-        "MIAKSEQEIGK",
-        "HKPENIVIEMAR",
-        "TILDFLKSDGFANR",
-        "KIECFDSVEISGVEDR",
-        "YVNFLYLASHYEKLK"),
-    Group3=c(
-        "LSKSR",
-        "DKPIR",
-        "KDLIIK",
-        "MKNYWR",
-        "KGILQTVK",
-        "NSDKLIAR",
-        "DDSIDNKVLTR"),
-    Group4=c(
-        "KLVDSTDK",
-        "IEKILTFR",
-        "KAIVDLLFK",
-        "VLSAYNKHR",
-        "IEEGIKELGSQILK",
-        "SSFEKNPIDFLEAK",
-        "SNFDLAEDAKLQLSK",
-        "HSLLYEYFTVYNELTKVK"),
-    Group5=c(
-        "KVTVK",
-        "EKIEK",
-        "VITLKSK",
-        "QLKEDYFK",
-        "QLLNAKLITQR",
-        "GGLSELDKAGFIK",
-        "MDGTEELLVKLNR"),
-    Group6=c(
-        "EVKVITLK",
-        "KPAFLSGEQK",
-        "ENQTTQKGQK",
-        "KTEVQTGGFSK",
-        "VVDELVKVMGR",
-        "LESEFVYGDYKVYDVR",
-        "MLASAGELQKGNELALPSK",
-        "NFMQLIHDDSLTFKEDIQK",
-        "VLPKHSLLYEYFTVYNELTK"),
-    Group7=c(
-        "KMIAK",
-        "ESILPKR",
-        "DLIIKLPK",
-        "FKVLGNTDR",
-        "SEQEIGKATAK",
-        "AIVDLLFKTNR",
-        "LKTYAHLFDDK",
-        "VNTEITKAPLSASMIK",
-        "YDEHHQDLTLLKALVR"),
-    Group8=c(
-        "KDWDPK",
-        "QQLPEKYK",
-        "KVLSMPQVNIVK",
-        "MTNFDKNLPNEK",
-        "QITKHVAQILDSR",
-        "KSEETITPWNFEEVVDK",
-        "KNGLFGNLIALSLGLTPNFK",
-        "SKLVSDFR"),
-    Group9=c(
-        "LKSVK",
-        "IIKDK",
-        "DWDPKK",
-        "LKGSPEDNEQK",
-        "VLSMPQVNIVKK",
-        "LENLIAQLPGEKK",
-        "LIYLALAHMIKFR",
-        "YPKLESEFVYGDYK"),
-    Group10=c(
-        "VPSKK",
-        "VTVKQLK",
-        "EDYFKK",
-        "VKYVTEGMR",
-        "GKSDNVPSEEVVK",
-        "LEESFLVEEDKK",
-        "QEDFYPFLKDNR"),
-    Group11=c(
-        "GQKNSR",
-        "AGFIKR",
-        "GYKEVK",
-        "VMKQLK",
-        "KDFQFYK",
-        "LVDSTDKADLR",
-        "SDNVPSEEVVKK",
-        "KNLIGALLFDSGETAEATR"),
-    Group12=c(
-        "HSIKK",
-        "DKQSGK",
-        "NLPNEKVLPK",
-        "QSGKTILDFLK",
-        "MNTKYDENDK",
-        "SVKELLGITIMER",
-        "TYAHLFDDKVMK",
-        "FNASLGTYHDLLKIIK")
-)
+# 
+# peptideGroups <- list(
+#     Group1=c(
+#         "SDKNR",
+#         "KLINGIR",
+#         "KFDNLTK",
+#         "FIKPILEK",
+#         "APLSASMIKR",
+#         "NPIDFLEAKGYK",
+#         "LPKYSLFELENGR",
+#         "TEVQTGGFSKESILPK"),
+#     Group2=c(
+#         "VKYVTEGMR",
+#         "FDNLTKAER",
+#         "DFQFYKVR",
+#         "YDENDKLIR",
+#         "MIAKSEQEIGK",
+#         "HKPENIVIEMAR",
+#         "TILDFLKSDGFANR",
+#         "KIECFDSVEISGVEDR",
+#         "YVNFLYLASHYEKLK"),
+#     Group3=c(
+#         "LSKSR",
+#         "DKPIR",
+#         "KDLIIK",
+#         "MKNYWR",
+#         "KGILQTVK",
+#         "NSDKLIAR",
+#         "DDSIDNKVLTR"),
+#     Group4=c(
+#         "KLVDSTDK",
+#         "IEKILTFR",
+#         "KAIVDLLFK",
+#         "VLSAYNKHR",
+#         "IEEGIKELGSQILK",
+#         "SSFEKNPIDFLEAK",
+#         "SNFDLAEDAKLQLSK",
+#         "HSLLYEYFTVYNELTKVK"),
+#     Group5=c(
+#         "KVTVK",
+#         "EKIEK",
+#         "VITLKSK",
+#         "QLKEDYFK",
+#         "QLLNAKLITQR",
+#         "GGLSELDKAGFIK",
+#         "MDGTEELLVKLNR"),
+#     Group6=c(
+#         "EVKVITLK",
+#         "KPAFLSGEQK",
+#         "ENQTTQKGQK",
+#         "KTEVQTGGFSK",
+#         "VVDELVKVMGR",
+#         "LESEFVYGDYKVYDVR",
+#         "MLASAGELQKGNELALPSK",
+#         "NFMQLIHDDSLTFKEDIQK",
+#         "VLPKHSLLYEYFTVYNELTK"),
+#     Group7=c(
+#         "KMIAK",
+#         "ESILPKR",
+#         "DLIIKLPK",
+#         "FKVLGNTDR",
+#         "SEQEIGKATAK",
+#         "AIVDLLFKTNR",
+#         "LKTYAHLFDDK",
+#         "VNTEITKAPLSASMIK",
+#         "YDEHHQDLTLLKALVR"),
+#     Group8=c(
+#         "KDWDPK",
+#         "QQLPEKYK",
+#         "KVLSMPQVNIVK",
+#         "MTNFDKNLPNEK",
+#         "QITKHVAQILDSR",
+#         "KSEETITPWNFEEVVDK",
+#         "KNGLFGNLIALSLGLTPNFK",
+#         "SKLVSDFR"),
+#     Group9=c(
+#         "LKSVK",
+#         "IIKDK",
+#         "DWDPKK",
+#         "LKGSPEDNEQK",
+#         "VLSMPQVNIVKK",
+#         "LENLIAQLPGEKK",
+#         "LIYLALAHMIKFR",
+#         "YPKLESEFVYGDYK"),
+#     Group10=c(
+#         "VPSKK",
+#         "VTVKQLK",
+#         "EDYFKK",
+#         "VKYVTEGMR",
+#         "GKSDNVPSEEVVK",
+#         "LEESFLVEEDKK",
+#         "QEDFYPFLKDNR"),
+#     Group11=c(
+#         "GQKNSR",
+#         "AGFIKR",
+#         "GYKEVK",
+#         "VMKQLK",
+#         "KDFQFYK",
+#         "LVDSTDKADLR",
+#         "SDNVPSEEVVKK",
+#         "KNLIGALLFDSGETAEATR"),
+#     Group12=c(
+#         "HSIKK",
+#         "DKQSGK",
+#         "NLPNEKVLPK",
+#         "QSGKTILDFLK",
+#         "MNTKYDENDK",
+#         "SVKELLGITIMER",
+#         "TYAHLFDDKVMK",
+#         "FNASLGTYHDLLKIIK")
+# )
 
 # Max number of crosslinks:
-peptideGroups %>% map_dbl(function(x) length(x)**2) %>% sum
+#peptideGroups %>% map_dbl(function(x) length(x)**2) %>% sum
 
 compareFDRs <- function(datTab, classifier="dvals", scalingFactor=10, ...) {
     class.max <- ceiling(max(datTab[[classifier]]))
@@ -1051,17 +1015,18 @@ compareFDRs <- function(datTab, classifier="dvals", scalingFactor=10, ...) {
 }
 
 
-fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals") {
+fdrPlots <- function(datTab, scalingFactor = 5, cutoff = 0, classifier="dvals") {
     datTab <- as.data.frame(datTab)
-    if (classifier=="dvals") {
-        stepSize = 0.25
-    } else if (classifier=="Score.Diff") {
-        stepSize = 1
-    } else {
-        stepSize = 0.25
-    }
+    # if (classifier=="dvals") {
+    #     stepSize = 0.5
+    # } else if (classifier=="Score.Diff") {
+    #     stepSize = 1
+    # } else {
+    #     stepSize = 0.5
+    # }
     minValue <- floor(min(datTab[[classifier]], na.rm = T))
     maxValue <- ceiling(max(datTab[[classifier]], na.rm = T))
+    stepSize = mfloor((maxValue - minValue) / 50, 0.25)
     decoyHist <- hist(datTab[datTab$Decoy=="Decoy", classifier], 
                       breaks=seq(minValue, maxValue, by=stepSize), 
                       plot=F)
