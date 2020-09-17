@@ -11,7 +11,7 @@ function(input, output, session) {
   shinyFileChoose(input, "modules", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
   shinyFileChoose(input, "chainmap", roots=exDir, filetypes=c('', 'txt'))
-  
+
   output$clmsDataFileName <- renderPrint({
     if (is.integer(input$clmsData)) {
       cat("No file selected")
@@ -96,9 +96,11 @@ function(input, output, session) {
     req(scResults())
       datTab <- scResults()
       # The links should be generated in touchStone upon reading the SC file:
+      msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
+      msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
       datTab <- datTab %>%
         mutate(link = pmap_chr(
-          list(Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
+          list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
       datTab <- generateCheckBoxes(datTab)
       minPPM = mfloor(min(datTab$ppm, na.rm=T))
       maxPPM = mfloor(max(datTab$ppm, na.rm=T))

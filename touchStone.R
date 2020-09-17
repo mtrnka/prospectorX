@@ -599,15 +599,20 @@ extractSpecFromMGFpd <- function(scanNo, mgfFile) {
     return(spectrum)
 }
 
-temp <- "http://msviewer.ucsf.edu/prospector/cgi-bin/mssearch.cgi?search_name=msproduct&output_type=HTML&report_title=MS-Product&version=6.2.1%20Basic&data_source=Data%20From%20File&data_filename=%2Fvar%2Flib%2Fprospector%2Fweb%2Fresults%2Fmsviewer%2Fd%2Fd%2Fddvhtnawdk%2FZ190207_filt2%2FZ20190207-09etd.mgf&use_instrument_ion_types=1&msms_min_precursor_mass=0&instrument_name=ESI-ETD-high-res&display_graph=1&msms_parent_mass_tolerance=15&msms_parent_mass_tolerance_units=ppm&fragment_masses_tolerance=25&fragment_masses_tolerance_units=ppm&msms_pk_filter=Max%20MSMS%20Pks&msms_max_peaks=80&fraction=1&spot_number=86.533&run=1&spectrum_number=1&max_charge=5&msms_precursor_charge=5&sequence=HPGSFDVVHVK%28%2BDSS%29DANGNSFATR&s=1&sequence2=ASTSK%28%2BDSS%29SESSQK&s2=1&count_pos_z=Ignore%20Basic%20AA&link_search_type=DSS&"
-temp2 <- unlist(str_split(temp, "&"))
-temp3 <- str_split(temp2, "=")
-templateKeys <- map_chr(temp3, function(x) {x[1]})
-templateVals <- map_chr(temp3, function(x) {x[2]})
-templateVals <- url_decode(templateVals)
-
-generateMSViewerLink <- function(fraction, rt, z, peptide.1, peptide.2) {
-    templateVals[6] <- str_replace(templateVals[6], "(?<=\\/)[[A-Z]][[0-9]]+\\-.+?\\.mgf", fraction)
+generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2) {
+    if(!str_detect(fraction, "\\.[[a-z]]$")) {
+        fraction <- paste0(fraction, ".mgf")
+    }
+    instrumentType <- switch(
+        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
+        ethcd = "ESI-EThcD-high-res",
+        hcd = "ESI-Q-high-res" #Add other instrument types
+    )
+    if (length(path==2)) {
+        path <- path[which(path != "name.txt")]
+    }
+    templateVals[6] <- str_c(path, fraction, sep="/")
+    templateVals[9] <- instrumentType
     templateVals[18] <- rt
     templateVals[21] <- z
     templateVals[22] <- z
