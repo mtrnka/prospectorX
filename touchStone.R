@@ -12,9 +12,9 @@ readProspectorXLOutput <- function(inputFile){
     header[spec_pos] <- c("Species.1", "Species.2")
     prot_pos <- str_which(header, "Protein.Name")
     header[prot_pos] <- c("Protein.1", "Protein.2")
-    if ("Protin.MW" %in% header) {
+    if ("Protein.MW" %in% header) {
         mw_pos <- str_which(header, "Protein.MW")
-        header[prot_pos] <- c("MW.1", "MW.2")
+        header[mw_pos] <- c("MW.1", "MW.2")
     }
     names(dataTable) <- header
     if (!"Spectrum" %in% names(dataTable)) {
@@ -610,6 +610,7 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2) {
     instrumentType <- switch(
         str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
         ethcd = "ESI-EThcD-high-res",
+        etd = "ESI-ETD-high-res",
         hcd = "ESI-Q-high-res" #Add other instrument types
     )
     templateVals[6] <- file.path(path, fraction)

@@ -19,8 +19,8 @@ mfloor <- function(x, base=5) {
 }
 
 # Path to MS-Viewer Data
-exDir = c(wd= './DemoFiles')
-#exDir = c(wd= '/var/lib/prospector/seqdb/web/results/msviewer/')
+#exDir = c(wd= './DemoFiles')
+exDir = c(wd= '/var/lib/prospector/seqdb/web/results/msviewer/')
 
 # For generating MS-Viewer Links Correctly
 queryTemplate <- "
