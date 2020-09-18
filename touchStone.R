@@ -599,16 +599,6 @@ extractSpecFromMGFpd <- function(scanNo, mgfFile) {
     return(spectrum)
 }
 
-<<<<<<< HEAD
-=======
-temp <- "http://rodin05.ucsf.edu/prospector/cgi-bin/mssearch.cgi?search_name=msproduct&output_type=HTML&report_title=MS-Product&version=6.2.29&data_source=Data%20From%20File&data_filename=%2Fvar%2Flib%2Fprospector%2Fseqdb%2Fweb%2Fresults%2Fmsviewer%2F6%2Fk%2F6k6yrj8tuo%2FZ20200703_ethcd%2FZ20200703-05_FTMSms2ethcd.mgf&use_instrument_ion_types=1&msms_min_precursor_mass=0&instrument_name=ESI-EThcD-high-res&display_graph=1&msms_parent_mass_tolerance=10&msms_parent_mass_tolerance_units=ppm&fragment_masses_tolerance=20&fragment_masses_tolerance_units=ppm&msms_pk_filter=Max%20MSMS%20Pks&msms_max_peaks=100&fraction=1&spot_number=59.210&run=1&spectrum_number=1&max_charge=4&msms_precursor_charge=4&sequence=SQK%28%2BDSG%29AIQDEIR&s=1&sequence2=Q%28Gln-%3Epyro-Glu%29QLPLPYEQLK%28%2BDSG%29HFYR&s2=1&count_pos_z=Ignore%20Basic%20AA&link_search_type=No%20Link&"
-temp2 <- unlist(str_split(temp, "&"))
-temp3 <- str_split(temp2, "=")
-templateKeys <- map_chr(temp3, function(x) {x[1]})
-templateVals <- map_chr(temp3, function(x) {x[2]})
-templateVals <- url_decode(templateVals)
-
->>>>>>> 94be24377469de2e0fee530abc320cf68e88a1de
 generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2) {
     if(!str_detect(fraction, "\\.[[a-z]]$")) {
         fraction <- paste0(fraction, ".mgf")
@@ -618,10 +608,7 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2) {
         ethcd = "ESI-EThcD-high-res",
         hcd = "ESI-Q-high-res" #Add other instrument types
     )
-    if (length(path==2)) {
-        path <- path[which(path != "name.txt")]
-    }
-    templateVals[6] <- str_c(path, fraction, sep="/")
+    templateVals[6] <- file.path(path, fraction)
     templateVals[9] <- instrumentType
     templateVals[18] <- rt
     templateVals[21] <- z

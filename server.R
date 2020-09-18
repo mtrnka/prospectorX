@@ -6,7 +6,6 @@ function(input, output, session) {
     consoleMessage()
   })
   
-  exDir = c(wd= './DemoFiles')
   shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "modules", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
@@ -96,14 +95,8 @@ function(input, output, session) {
     req(scResults())
       datTab <- scResults()
       # The links should be generated in touchStone upon reading the SC file:
-<<<<<<< HEAD
       msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
       msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
-=======
-      tempPath <- parseFilePaths(exDir, input$clmsData)$datapath
-      tempContents <- system2("ls", dirname(tempPath), stdout=T)
-      #print(tempContents)
->>>>>>> 94be24377469de2e0fee530abc320cf68e88a1de
       datTab <- datTab %>%
         mutate(link = pmap_chr(
           list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
