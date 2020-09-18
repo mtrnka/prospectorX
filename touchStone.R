@@ -10,8 +10,12 @@ readProspectorXLOutput <- function(inputFile){
     header[acc_pos] <- c("Acc.1", "Acc.2")
     spec_pos <- str_which(header, "Species")
     header[spec_pos] <- c("Species.1", "Species.2")
-    prot_pos <- str_which(header, "Protein")
+    prot_pos <- str_which(header, "Protein.Name")
     header[prot_pos] <- c("Protein.1", "Protein.2")
+    if ("Protin.MW" %in% header) {
+        mw_pos <- str_which(header, "Protein.MW")
+        header[prot_pos] <- c("MW.1", "MW.2")
+    }
     names(dataTable) <- header
     if (!"Spectrum" %in% names(dataTable)) {
         dataTable$Spectrum <- 1
