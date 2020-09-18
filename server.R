@@ -97,6 +97,7 @@ function(input, output, session) {
       # The links should be generated in touchStone upon reading the SC file:
       msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
       msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
+      msvFiles <- str_replace(msvFiles, "\\/$", "")
       datTab <- datTab %>%
         mutate(link = pmap_chr(
           list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
