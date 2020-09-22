@@ -326,6 +326,14 @@ calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFact
     return(fdr)
 }
 
+calculateHits <- function(datTab, threshold=-100, classifier="dvals") {
+    datTab <- datTab[datTab[[classifier]] >= threshold, ]
+    datTab <- datTab[datTab$Decoy == "Target", ]
+    intra <- nrow(datTab[datTab$xlinkClass == "intraProtein",])
+    inter <- nrow(datTab[datTab$xlinkClass == "interProtein",])
+    return(c("thresh"=threshold, "intra"=intra, "inter"=inter))
+}
+
 calculateGT <- function(datTab, threshold=-100, classifier="dvals") {
     datTab <- datTab[datTab[[classifier]] >= threshold & 
                          datTab$Decoy=="Target", ]
@@ -362,7 +370,20 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
     }))
     error.rates[is.na(error.rates)] <- 0
     error.diff <- (error.rates - targetER)
-    plot(error.rates ~ class.range, type="l")
+    #plot(error.rates ~ class.range, type="l")
+    
+    num.hits <- map_dfr(class.range, function(threshold) {
+        calculateHits(datTab, threshold=threshold, classifier=classifier, ...)
+    })
+    num.hits$fdr <- error.rates
+    p <- num.hits %>% ggplot(aes(x=fdr)) +
+        geom_line(aes(y=intra), color="red") +
+        geom_line(aes(y=inter), color="blue") + 
+        geom_line(aes(y=intra+inter), color="black") +
+        theme_bw() +
+        xlab("FDR") + 
+        ylab("Num Hits")
+    print(p)
     error.cross <- logical(length(class.range))
     for (i in 1:(length(class.range) - 1)) {
         error.cross[i] <- error.diff[i] > 0 & error.diff[i+1] <= 0
@@ -379,7 +400,7 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
     if (threshold < minThreshold) {
         threshold = minThreshold
     }
-    abline(v=threshold, lwd=2, lt=2, col="red")
+    #abline(v=threshold, lwd=2, lt=2, col="red")
     return(c(threshold, calculateFDR(datTab, threshold)))
 }
 
