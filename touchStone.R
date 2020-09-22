@@ -376,14 +376,17 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
         calculateHits(datTab, threshold=threshold, classifier=classifier, ...)
     })
     num.hits$fdr <- error.rates
-    p <- num.hits %>% ggplot(aes(x=fdr)) +
-        geom_line(aes(y=intra), color="red") +
-        geom_line(aes(y=inter), color="blue") + 
-        geom_line(aes(y=intra+inter), color="black") +
+    num.hits$total <- num.hits$inter + num.hits$intra
+    num.hits <- num.hits %>% 
+        pivot_longer(cols=c(-fdr,-thresh), 
+                     names_to="crosslinkClass",
+                     values_to="numHits")
+    p <- num.hits %>% ggplot(aes(x=fdr, y=numHits)) +
+        geom_line(aes(col=crosslinkClass)) +
         theme_bw() +
+        scale_color_brewer(type="qual", palette="Set1") + 
         xlab("FDR") + 
         ylab("Num Hits")
-    print(p)
     error.cross <- logical(length(class.range))
     for (i in 1:(length(class.range) - 1)) {
         error.cross[i] <- error.diff[i] > 0 & error.diff[i+1] <= 0
@@ -401,6 +404,9 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
         threshold = minThreshold
     }
     #abline(v=threshold, lwd=2, lt=2, col="red")
+    p <- p + geom_vline(xintercept = error.rates[firstCross], 
+                        col="red", size=1.5)
+    print(p)
     return(c(threshold, calculateFDR(datTab, threshold)))
 }
 
