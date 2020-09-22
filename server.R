@@ -167,9 +167,9 @@ function(input, output, session) {
     req(tabLevel())
     threshold <- findThreshold(tabLevelFiltered(), targetER = input$targetFDR / 100)
     print(threshold)
-    updateSliderInput(session, "svmThreshold", value = threshold[1])
+    updateSliderInput(session, "svmThreshold", value = threshold[[1]])
     output$thresholdPlot <- renderPlot({
-      findThreshold(tabLevelFiltered())
+      numHitsPlot(threshold[[3]], threshold[[2]])
     })
   })
   

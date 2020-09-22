@@ -328,7 +328,6 @@ calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFact
 
 calculateHits <- function(datTab, threshold=-100, classifier="dvals") {
     datTab <- datTab[datTab[[classifier]] >= threshold, ]
-    datTab <- datTab[datTab$Decoy == "Target", ]
     intra <- nrow(datTab[datTab$xlinkClass == "intraProtein",])
     inter <- nrow(datTab[datTab$xlinkClass == "interProtein",])
     return(c("thresh"=threshold, "intra"=intra, "inter"=inter))
@@ -353,8 +352,8 @@ violationRate <- function(datTab, threshold, classifier="Score.Diff", maxDistanc
     return(nAbove / (nAbove + nBelow))
 }
 
-findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
-                          classifier="dvals", errorFUN= calculateFDR, ...) {
+generateErrorTable <- function(datTab, classifier="dvals",
+                               errorFUN=calculateFDR, ...) {
     class.max <- ceiling(max(datTab[[classifier]]))
     class.min <- floor(min(datTab[[classifier]]))
     if (classifier=="dvals") {
@@ -366,27 +365,25 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
     }
     class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
     error.rates <- unlist(lapply(class.range, function(threshold) {
-                                 errorFUN(datTab, threshold=threshold, classifier=classifier, ...)
+        errorFUN(datTab, threshold=threshold, classifier=classifier, ...)
     }))
     error.rates[is.na(error.rates)] <- 0
-    error.diff <- (error.rates - targetER)
     #plot(error.rates ~ class.range, type="l")
     
     num.hits <- map_dfr(class.range, function(threshold) {
-        calculateHits(datTab, threshold=threshold, classifier=classifier, ...)
+        calculateHits(removeDecoys(datTab), threshold=threshold, classifier=classifier, ...)
     })
     num.hits$fdr <- error.rates
     num.hits$total <- num.hits$inter + num.hits$intra
-    num.hits <- num.hits %>% 
-        pivot_longer(cols=c(-fdr,-thresh), 
-                     names_to="crosslinkClass",
-                     values_to="numHits")
-    p <- num.hits %>% ggplot(aes(x=fdr, y=numHits)) +
-        geom_line(aes(col=crosslinkClass)) +
-        theme_bw() +
-        scale_color_brewer(type="qual", palette="Set1") + 
-        xlab("FDR") + 
-        ylab("Num Hits")
+    return(num.hits)
+}
+
+findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
+                          classifier="dvals", errorFUN=calculateFDR, ...) {
+    num.hits <- generateErrorTable(datTab, classifier, errorFUN, ...)
+    error.rates <- num.hits$fdr
+    class.range <- num.hits$thresh
+    error.diff <- (error.rates - targetER)
     error.cross <- logical(length(class.range))
     for (i in 1:(length(class.range) - 1)) {
         error.cross[i] <- error.diff[i] > 0 & error.diff[i+1] <= 0
@@ -403,11 +400,7 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
     if (threshold < minThreshold) {
         threshold = minThreshold
     }
-    #abline(v=threshold, lwd=2, lt=2, col="red")
-    p <- p + geom_vline(xintercept = error.rates[firstCross], 
-                        col="red", size=1.5)
-    print(p)
-    return(c(threshold, calculateFDR(datTab, threshold)))
+    return(list(threshold, errorFUN(datTab, threshold, ...), num.hits))
 }
 
 removeDecoys <- function(datTab) {
@@ -552,7 +545,7 @@ buildClassifier <- function(datTab) {
     ind <- sample(nrow(datTab),nrow(datTab)/2)
     train <- datTab[ind,]
     test <- datTab[-1 * ind,]
-    params <- c("Score.Diff", "percMatch","z","Score","numCSM","massError", "Rk.2","Rk.1")
+    params <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
     wghts <- numeric(0)
     wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
     wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
@@ -677,9 +670,15 @@ formatXLTable <- function(datTab) {
                                 "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
                                 "XLink.AA.1", "Protein.1", "Modul.1", "Species.1",
                                 "Acc.2", "XLink.AA.2", "Protein.2", "Modul.2", "Species.2",
-                                "xlinkClass", "percMatch", "Len.Pep.1", "Len.Pep.2",
+                                "xlinkClass", "Len.Pep.1", "Len.Pep.2",
                                 "Peptide.1", "Peptide.2", "Elemental.Composition",
-                                "Fraction", "RT", "Spectrum", "MSMS.Info")))
+                                "Fraction", "RT", "MSMS.Info")))
+    datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
+                                Protein.2 = factor(Protein.2),
+                                Modul.1 = factor(Modul.1),
+                                Modul.2 = factor(Modul.2))
+    fct_unify(list(datTab$Protein.1, datTab$Protein.2))
+    fct_unify(list(datTab$Modul.1, datTab$Modul.2))
     return(datTab)
 }
 
@@ -1247,7 +1246,25 @@ distancePlot <- function(targetDists, randomDists, threshold) {
            bty="n")
 }
 
+numHitsPlot <- function(num.hits, threshold) {
+    num.hits <- num.hits %>%
+        pivot_longer(cols=c(-fdr,-thresh),
+                     names_to="crosslinkClass",
+                     values_to="numHits")
+    p <- num.hits %>% ggplot(aes(x=fdr, y=numHits)) +
+        geom_line(aes(col=crosslinkClass)) +
+        theme_bw() +
+        theme(legend.position="top") +
+        scale_color_brewer(type="qual", palette="Set1") +
+        xlab("FDR") +
+        ylab("Num Hits")
+    p <- p + geom_vline(xintercept = threshold,
+                        col="red", size=1.5)
+    print(p)
+}
 
+#findThreshold(test, targetER=0.01)
+#numHitsPlot(generateErrorTable(test), 0.01)
 
 
 
