@@ -65,6 +65,9 @@ fluidPage(
                                         step = 0.5, value = 1.0)
                      ),
                      tags$hr(),
+                     downloadButton("saveClassified", "Save results"),
+                     br(),
+                     tags$hr(),
                      fluidRow(
                          column(6, 
                                 sliderInput("svmThreshold", "Min. SVM Score", min = -5, max = 10, 

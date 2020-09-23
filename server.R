@@ -11,6 +11,14 @@ function(input, output, session) {
   shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
   shinyFileChoose(input, "chainmap", roots=exDir, filetypes=c('', 'txt'))
 
+  output$saveClassified <- downloadHandler(
+    filename = output$clmsDataFileName,
+    content = function(file) {
+      write_tsv(xlTable(), file)
+    }
+  )
+  
+  
   output$clmsDataFileName <- renderPrint({
     if (is.integer(input$clmsData)) {
       cat("No file selected")

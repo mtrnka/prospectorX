@@ -595,7 +595,9 @@ buildClassifier <- function(datTab) {
 
 formatMSViewerFile <- function(datTab) {
     require(stringr)
-    datTab$percMatch <- round(datTab$percMatch * 100, 2)
+    if ("percMatch" %in% names(datTab)) {
+        datTab$percMatch <- round(datTab$percMatch * 100, 2)
+    }
     datTab$dvals <- round(datTab$dvals, 2)
     datTab$Spectrum <- 1
     datTab <- datTab[order(datTab$Fraction, datTab$MSMS.Info),]
@@ -650,7 +652,9 @@ generateCheckBoxes <- function(datTab) {
 }
 
 formatXLTable <- function(datTab) {
-    datTab$percMatch <- round(datTab$percMatch * 100, 2)
+    if ("percMatch" %in% names(datTab)) {
+        datTab$percMatch <- round(datTab$percMatch * 100, 2)
+    }
     datTab$dvals <- round(datTab$dvals, 2)
     datTab$Fraction <- gsub("(.*)\\.[^.]+$", "\\1", datTab$Fraction)
     names(datTab) <- gsub("dvals", "SVM.score", names(datTab))
