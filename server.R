@@ -152,7 +152,7 @@ function(input, output, session) {
 
   fdr <- reactiveVal()
   observe({fdr(calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold))})
-  
+
   output$FDR <- renderText({
     req(tabLevel())
     str_c("FDR: ", as.character(round(100 * fdr(), 2)), "%")
@@ -160,18 +160,20 @@ function(input, output, session) {
 
   output$FDRplot <- renderPlot({
     req(tabLevel())
-    fdrPlots(tabLevelFiltered(), cutoff = fdr())
+    numHitsPlot(tabLevelFiltered(), cutoff = fdr())
   })
+
+  numHits <- reactiveVal()
 
   observeEvent(input$findThreshold, {
     req(tabLevel())
     threshold <- findThreshold(tabLevelFiltered(), targetER = input$targetFDR / 100)
-    print(threshold)
     updateSliderInput(session, "svmThreshold", value = threshold[[1]])
+    numHits(threshold[[3]])
   })
 
   output$thresholdPlot <- renderPlot({
-    numHitsPlot(threshold[[3]], threshold[[2]])
+    numHitsPlot(numHits(), fdr())
   })
   
     
