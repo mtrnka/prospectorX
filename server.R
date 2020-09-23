@@ -164,15 +164,16 @@ function(input, output, session) {
   })
 
   numHits <- reactiveVal()
-
+  observe({numHits(generateErrorTable(tabLevelFiltered()))})
+  
   observeEvent(input$findThreshold, {
     req(tabLevel())
     threshold <- findThreshold(tabLevelFiltered(), targetER = input$targetFDR / 100)
     updateSliderInput(session, "svmThreshold", value = threshold[[1]])
-    numHits(threshold[[3]])
   })
 
   output$thresholdPlot <- renderPlot({
+    req()
     numHitsPlot(numHits(), fdr())
   })
   

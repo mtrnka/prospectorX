@@ -20,9 +20,9 @@ readProspectorXLOutput <- function(inputFile){
     if (!"Spectrum" %in% names(dataTable)) {
         dataTable$Spectrum <- 1
     }
-    if (!"distance" %in% names(dataTable)) {
-        dataTable$distance <- NA_real_
-    }
+    # if (!"distance" %in% names(dataTable)) {
+    #     dataTable$distance <- NA_real_
+    # }
     dataTable <- calculateDecoys(dataTable)
     dataTable <- calculatePairs(dataTable)
     dataTable <- assignXLinkClass(dataTable)
@@ -30,7 +30,6 @@ readProspectorXLOutput <- function(inputFile){
     dataTable <- calculatePeptideLengths(dataTable)
     dataTable <- lengthFilter(dataTable, minLen = 3, maxLen = 35)
     dataTable <- scoreFilter(dataTable, minScore = 0)
-    #Add stuff to remove useless columns from data table.
     return(dataTable)
 }
 
@@ -400,7 +399,7 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
     if (threshold < minThreshold) {
         threshold = minThreshold
     }
-    return(list(threshold, errorFUN(datTab, threshold, ...), num.hits))
+    return(list(threshold, errorFUN(datTab, threshold, ...)))
 }
 
 removeDecoys <- function(datTab) {
@@ -682,6 +681,19 @@ formatXLTable <- function(datTab) {
         datTab <- datTab %>% mutate(Modul.1 = factor(Modul.1), 
                                     Modul.2 = factor(Modul.2))
         fct_unify(list(datTab$Modul.1, datTab$Modul.2))
+    }
+    if ("Species.1" %in% names(datTab) & "Species.2" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(Species.1 = factor(Species.1), 
+                                    Species.2 = factor(Species.2))
+        fct_unify(list(datTab$Species.1, datTab$Species.2))
+    }
+    if ("Acc.1" %in% names(datTab) & "Acc.2" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(Acc.1 = factor(Acc.1), 
+                                    Acc.2 = factor(Acc.2))
+        fct_unify(list(datTab$Acc.1, datTab$Acc.2))
+    }
+    if ("xlinkClass" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(xlinkClass = factor(xlinkClass), 
     }
     return(datTab)
 }
