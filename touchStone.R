@@ -20,9 +20,9 @@ readProspectorXLOutput <- function(inputFile){
     if (!"Spectrum" %in% names(dataTable)) {
         dataTable$Spectrum <- 1
     }
-    # if (!"distance" %in% names(dataTable)) {
-    #     dataTable$distance <- NA_real_
-    # }
+    if (!"distance" %in% names(dataTable)) {
+        dataTable$distance <- NA_real_
+    }
     dataTable <- calculateDecoys(dataTable)
     dataTable <- calculatePairs(dataTable)
     dataTable <- assignXLinkClass(dataTable)
@@ -662,6 +662,10 @@ formatXLTable <- function(datTab) {
                -starts_with("Num."), 
                -massError, 
                -xlinkedPepPair)
+    if (sum(!is.na(datTab$distance)) == 0) {
+        datTab <- datTab %>%
+            select(-distance)
+    }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
     datTab <- datTab %>% select(any_of(c("selected", "link", "xlinkedResPair", 
                                 "SVM.score", "distance", "m.z", "z", "ppm",
@@ -693,7 +697,7 @@ formatXLTable <- function(datTab) {
         fct_unify(list(datTab$Acc.1, datTab$Acc.2))
     }
     if ("xlinkClass" %in% names(datTab)) {
-        datTab <- datTab %>% mutate(xlinkClass = factor(xlinkClass), 
+        datTab <- datTab %>% mutate(xlinkClass = factor(xlinkClass))
     }
     return(datTab)
 }

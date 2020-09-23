@@ -160,7 +160,7 @@ function(input, output, session) {
 
   output$FDRplot <- renderPlot({
     req(tabLevel())
-    numHitsPlot(tabLevelFiltered(), cutoff = fdr())
+    fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
   })
 
   numHits <- reactiveVal()
