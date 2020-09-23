@@ -673,12 +673,16 @@ formatXLTable <- function(datTab) {
                                 "xlinkClass", "Len.Pep.1", "Len.Pep.2",
                                 "Peptide.1", "Peptide.2", "Elemental.Composition",
                                 "Fraction", "RT", "MSMS.Info")))
-    datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
-                                Protein.2 = factor(Protein.2),
-                                Modul.1 = factor(Modul.1),
-                                Modul.2 = factor(Modul.2))
-    fct_unify(list(datTab$Protein.1, datTab$Protein.2))
-    fct_unify(list(datTab$Modul.1, datTab$Modul.2))
+    if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
+                                    Protein.2 = factor(Protein.2))
+        fct_unify(list(datTab$Protein.1, datTab$Protein.2))
+    }
+    if ("Modul.1" %in% names(datTab) & "Modul.2" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(Modul.1 = factor(Modul.1), 
+                                    Modul.2 = factor(Modul.2))
+        fct_unify(list(datTab$Modul.1, datTab$Modul.2))
+    }
     return(datTab)
 }
 

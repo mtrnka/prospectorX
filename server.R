@@ -50,10 +50,10 @@ function(input, output, session) {
     if (!is.integer(input$clmsData)) {
       inFile <- parseFilePaths(exDir, input$clmsData)
       consoleMessage("*** Loading Search Compare File ***")
-      scResults <- readProspectorXLOutput(inFile$datapath)
+      scTable <- readProspectorXLOutput(inFile$datapath)
       consoleMessage("*** Building SVM Classifier ***")
-      scResults <- buildClassifier(scResults)
-      return(scResults)
+      scTable <- buildClassifier(scTable)
+      return(scTable)
     }
   })
   
@@ -142,25 +142,25 @@ function(input, output, session) {
   
   output$numberClassedLinks <- renderText({
     req(tabLevel())
-      paste0("Number of ", input$summaryLevel, ": ", nrow(xlTable()))
+      str_c("Number of ", input$summaryLevel, ": ", nrow(xlTable()))
   })
   
   output$dataFile <- DT::renderDataTable({
     req(csmTab())
     DT::datatable(formatXLTable(xlTable()), filter="top", escape=FALSE)
   })
+
+  fdr <- reactiveVal()
+  observe({fdr(calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold))})
   
   output$FDR <- renderText({
     req(tabLevel())
-    paste0("FDR: ", 
-           as.character(round(100 * calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold), 2)),
-           "%"
-    )
+    str_c("FDR: ", as.character(round(100 * fdr(), 2)), "%")
   })
 
   output$FDRplot <- renderPlot({
     req(tabLevel())
-    fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
+    fdrPlots(tabLevelFiltered(), cutoff = fdr())
   })
 
   observeEvent(input$findThreshold, {
@@ -168,11 +168,13 @@ function(input, output, session) {
     threshold <- findThreshold(tabLevelFiltered(), targetER = input$targetFDR / 100)
     print(threshold)
     updateSliderInput(session, "svmThreshold", value = threshold[[1]])
-    output$thresholdPlot <- renderPlot({
-      numHitsPlot(threshold[[3]], threshold[[2]])
-    })
+  })
+
+  output$thresholdPlot <- renderPlot({
+    numHitsPlot(threshold[[3]], threshold[[2]])
   })
   
+    
   randomDists <- reactive({
     req(pdbFile())
     consoleMessage("*** geting random Lys-Lys distances ***")
@@ -198,7 +200,7 @@ function(input, output, session) {
 
   output$VR <- renderText({
     req(targetDists())
-    paste0("Violation Rate: ", as.character(round(100 * VR(), 2)), "%"
+    str_c("Violation Rate: ", as.character(round(100 * VR(), 2)), "%"
     )
   })
 
@@ -218,7 +220,7 @@ function(input, output, session) {
   
   output$meanError <- renderText({
     req(tabLevel())
-    paste0("mean error: ", round(mean(classedMassErrors(), na.rm=T),2), " ppm")
+    str_c("mean error: ", round(mean(classedMassErrors(), na.rm=T),2), " ppm")
   })
 
   output$distanceSlider <- renderUI({
