@@ -173,11 +173,10 @@ function(input, output, session) {
   })
 
   output$thresholdPlot <- renderPlot({
-    req()
+    req(numHits())
     numHitsPlot(numHits(), fdr())
   })
   
-    
   randomDists <- reactive({
     req(pdbFile())
     consoleMessage("*** geting random Lys-Lys distances ***")
