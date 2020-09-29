@@ -541,7 +541,12 @@ parseCrosslinker <- function(datTab) {
 
 buildClassifier <- function(datTab) {
     datTab$massError <- abs(datTab$ppm)
-    ind <- sample(nrow(datTab),nrow(datTab)/2)
+    if (nrow(datTab) > 30000) {
+        sampleNo <- 15000
+    } else {
+        sampleNo <- nrow(datTab)/2
+    }
+    ind <- sample(nrow(datTab),sampleNo)
     train <- datTab[ind,]
     test <- datTab[-1 * ind,]
     params <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
@@ -624,12 +629,13 @@ extractSpecFromMGFpd <- function(scanNo, mgfFile) {
     return(spectrum)
 }
 
-generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2) {
+generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, spectrum) {
     if(!str_detect(fraction, "\\.[[a-z]]$")) {
         fraction <- paste0(fraction, ".mgf")
     }
     instrumentType <- switch(
         str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
+        "ESI-Q-high-res",
         ethcd = "ESI-EThcD-high-res",
         etd = "ESI-ETD-high-res",
         hcd = "ESI-Q-high-res" #Add other instrument types
@@ -637,6 +643,7 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2) {
     templateVals[6] <- file.path(path, fraction)
     templateVals[9] <- instrumentType
     templateVals[18] <- rt
+    templateVals[20] <- spectrum
     templateVals[21] <- z
     templateVals[22] <- z
     templateVals[23] <- peptide.1

@@ -12,13 +12,14 @@ function(input, output, session) {
   shinyFileChoose(input, "chainmap", roots=exDir, filetypes=c('', 'txt'))
 
   output$saveClassified <- downloadHandler(
-    filename = output$clmsDataFileName,
+    filename = function() {
+      str_c(parseFilePaths(exDir, input$clmsData)$name)
+    },
     content = function(file) {
       write_tsv(xlTable(), file)
     }
   )
-  
-  
+ 
   output$clmsDataFileName <- renderPrint({
     if (is.integer(input$clmsData)) {
       cat("No file selected")
@@ -108,7 +109,7 @@ function(input, output, session) {
       msvFiles <- str_replace(msvFiles, "\\/$", "")
       datTab <- datTab %>%
         mutate(link = pmap_chr(
-          list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2), generateMSViewerLink))
+          list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum), generateMSViewerLink))
       datTab <- generateCheckBoxes(datTab)
       minPPM = mfloor(min(datTab$ppm, na.rm=T))
       maxPPM = mfloor(max(datTab$ppm, na.rm=T))
@@ -155,7 +156,18 @@ function(input, output, session) {
   
   output$dataFile <- DT::renderDataTable({
     req(csmTab())
-    DT::datatable(formatXLTable(xlTable()), filter="top", escape=FALSE)
+    DT::datatable(formatXLTable(xlTable()), 
+                  options = list(autoWidth=TRUE, 
+                                 columnDefs=list(list(width = '200px', targets = "_all")),
+                                 scrollX=FALSE,
+                                 scrollY="80vh",
+                                 scrollCollapse=TRUE,
+                                 paging=TRUE,
+                                 pageLength=150
+                                ), 
+                  filter="top", 
+                  escape=FALSE
+                 )
   })
 
   fdr <- reactiveVal()

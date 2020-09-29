@@ -65,7 +65,7 @@ fluidPage(
                                         step = 0.5, value = 1.0)
                      ),
                      tags$hr(),
-                     downloadButton("saveClassified", "Save results"),
+                     downloadButton("saveClassified", label = "Save results"),
                      br(),
                      tags$hr(),
                      fluidRow(
@@ -87,7 +87,7 @@ fluidPage(
                          )
                      )
         ),
-        mainPanel(
+        mainPanel(width=9,
             navbarPage(
                 title="Touchstone", id="navbar",
                 tabPanel("Classification",
@@ -112,7 +112,6 @@ fluidPage(
                          ),
                 ),
                 tabPanel("Crosslink Table",
-                         h4("Output Panel"),
                          fluidRow(
                              DT::dataTableOutput("dataFile")
                          )
