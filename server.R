@@ -156,20 +156,27 @@ function(input, output, session) {
   
   output$dataFile <- DT::renderDataTable({
     req(csmTab())
-    DT::datatable(formatXLTable(xlTable()), 
-                  options = list(autoWidth=TRUE, 
-                                 columnDefs=list(list(width = '200px', targets = "_all")),
-                                 scrollX=FALSE,
+    displayTable <- formatXLTable(xlTable())
+    wideCols <- which(names(displayTable) %in% c("xlinkeResPair", "DB.Peptide.1", "DB.Peptide.2", "Protein.1", "Protein.2", "Peptide.1", "Peptide.2", "Fraction"))
+    DT::datatable(displayTable,
+                  options = list(autoWidth=TRUE,
+                                 deferRender=TRUE,
+                                 processing=TRUE,
+                                 columnDefs=list(list(width = '200px', targets = as.list(wideCols))),
+                                 #                                 columnDefs=list(list(width = '200px', targets = c(3,7,8,17,21,26,27))),
+                                 scrollX=TRUE,
                                  scrollY="80vh",
                                  scrollCollapse=TRUE,
                                  paging=TRUE,
-                                 pageLength=150
-                                ), 
-                  filter="top", 
+                                 pageLength=100,
+                                 search.caseInsensitive=TRUE,
+                                 scroller=TRUE
+                  ),
+                  filter="top",
                   escape=FALSE
-                 )
+    )
   })
-
+  
   fdr <- reactiveVal()
   observe({fdr(calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold))})
 

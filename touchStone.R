@@ -263,11 +263,23 @@ calculatePairs <- function(searchTable){
     return(searchTable)
 }
 
-assignXLinkClass <- function(searchTable){
-    searchTable$xlinkClass <- "intraProtein"
-    searchTable[searchTable$Protein.1 != searchTable$Protein.2, "xlinkClass"] <- "interProtein"
+assignXLinkClass <- function(searchTable) {
+    intraProteinLinks <- searchTable$Acc.1 == searchTable$Acc.2
+    interProteinLinks <- searchTable$Acc.1 != searchTable$Acc.2
+    s1 <- searchTable$Start.1
+    s2 <- searchTable$Start.2
+    e1 <- searchTable$End.1
+    e2 <- searchTable$End.2
+    condition1 <- (s1 >= s2) & (s1 <= e2)
+    condition2 <- (e1 >= s2) & (e1 <= e2)
+    interHomomerLinks <- condition1 | condition2
+    searchTable$xlinkClass <- ifelse(intraProteinLinks,
+                                     ifelse(interHomomerLinks,
+                                     "interProtein, homomeric",
+                                     "intraProtein"),
+                                     "interProtein, heteromeric")
     return(searchTable)
-}
+ }
 
 calculatePercentMatched <- function(searchTable) {
     if ("Num.Pks" %in% names(searchTable) & "Num.Unmat" %in% names(searchTable)) {
@@ -640,6 +652,7 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, sp
         etd = "ESI-ETD-high-res",
         hcd = "ESI-Q-high-res" #Add other instrument types
     )
+    linkType <- str_extract(peptide.1, "(?<=\\(\\+).+?(?=\\))")
     templateVals[6] <- file.path(path, fraction)
     templateVals[9] <- instrumentType
     templateVals[18] <- rt
@@ -648,6 +661,7 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, sp
     templateVals[22] <- z
     templateVals[23] <- peptide.1
     templateVals[25] <- peptide.2
+    templateVals[28] <- linkType
     templateVals <- url_encode(templateVals)
     zipped <- str_c(templateKeys[1:28], templateVals[1:28], sep="=", collapse="&")
     str_c('<a href=\"', zipped, '\" target=\"_blank\">Spectrum</a>')
@@ -670,7 +684,7 @@ formatXLTable <- function(datTab) {
     datTab <- datTab %>% 
         select(-starts_with("Res"), 
                -starts_with("Decoy"), 
-               -starts_with("Num."), 
+               -starts_with("Num\\."), 
                -massError, 
                -xlinkedPepPair)
     if (sum(!is.na(datTab$distance)) == 0) {
@@ -710,6 +724,16 @@ formatXLTable <- function(datTab) {
     if ("xlinkClass" %in% names(datTab)) {
         datTab <- datTab %>% mutate(xlinkClass = factor(xlinkClass))
     }
+    if ("Fraction" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(xlinkClass = factor(Fraction))
+    }
+    if ("z" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(z = as.integer(z))
+    }
+    if ("MSMS.Info" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(MSMS.Info = as.integer(MSMS.Info))
+    }
+    datTab <- datTab %>% mutate(xlinkedResPair = fct_drop(xlinkedResPair))
     return(datTab)
 }
 
@@ -1125,7 +1149,7 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
     plot(decoyHist, add=T, col="salmon")
     plot(doubleDecoyHist, add=T, col="goldenrod1")
     abline(v=cutoff, lwd=4, lt=2, col="red")
-    legend("topright", c("Tar-Tar", "Tar-Dec", "Dec-Dec"), 
+    legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
            fill = c("lightblue", "salmon", "goldenrod1"),
            bty="n")
 }    
