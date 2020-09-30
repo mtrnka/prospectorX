@@ -673,19 +673,13 @@ generateCheckBoxes <- function(datTab) {
 }
 
 formatXLTable <- function(datTab) {
-    if ("percMatch" %in% names(datTab)) {
-        datTab$percMatch <- round(datTab$percMatch * 100, 2)
-    }
-    datTab$dvals <- round(datTab$dvals, 2)
-    datTab$Fraction <- gsub("(.*)\\.[^.]+$", "\\1", datTab$Fraction)
-    names(datTab) <- gsub("dvals", "SVM.score", names(datTab))
     annoyingColumns <- str_which(names(datTab), "(Int|Dec)[a-z]{2}\\.[[1-2]]")
     datTab <- datTab[, -annoyingColumns]
-    datTab <- datTab %>% 
-        select(-starts_with("Res"), 
-               -starts_with("Decoy"), 
-               -starts_with("Num\\."), 
-               -massError, 
+    datTab <- datTab %>%
+        select(-starts_with("Res"),
+               -starts_with("Decoy"),
+               -starts_with("Num\\."),
+               -massError,
                -xlinkedPepPair)
     if (sum(!is.na(datTab$distance)) == 0) {
         datTab <- datTab %>%
@@ -693,13 +687,13 @@ formatXLTable <- function(datTab) {
     }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
     datTab <- datTab %>% select(any_of(c("selected", "link", "xlinkedResPair", 
-                                "SVM.score", "distance", "m.z", "z", "ppm",
+                                "dvals", "distance", "m.z", "z", "ppm",
                                 "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
                                 "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
                                 "XLink.AA.1", "Protein.1", "Modul.1", "Species.1",
                                 "Acc.2", "XLink.AA.2", "Protein.2", "Modul.2", "Species.2",
                                 "xlinkClass", "Len.Pep.1", "Len.Pep.2",
-                                "Peptide.1", "Peptide.2", "Elemental.Composition",
+                                "Peptide.1", "Peptide.2", "NumCSM",
                                 "Fraction", "RT", "MSMS.Info")))
     if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
@@ -725,7 +719,27 @@ formatXLTable <- function(datTab) {
         datTab <- datTab %>% mutate(xlinkClass = factor(xlinkClass))
     }
     if ("Fraction" %in% names(datTab)) {
+        datTab$Fraction <- gsub("(.*)\\.[^.]+$", "\\1", datTab$Fraction)
         datTab <- datTab %>% mutate(xlinkClass = factor(Fraction))
+    }
+    if ("percMatch" %in% names(datTab)) {
+        datTab$percMatch <- round(datTab$percMatch * 100, 2)
+    }
+    if ("dvals" %in% names(datTab)) {
+        datTab$dvals <- round(datTab$dvals, 2)
+        names(datTab) <- gsub("dvals", "SVM.score", names(datTab))
+    }
+    if ("Rk.1" %in% names(datTab) & "Rk.2" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(Rk.1 = as.integer(Rk.1), 
+                                    Rk.2 = as.integer(Rk.2))
+    }
+    if ("XLink.AA.1" %in% names(datTab) & "XLink.AA.2" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(XLink.AA.1 = as.integer(XLink.AA.1), 
+                                    XLink.AA.2 = as.integer(XLink.AA.2))
+    }
+    if ("Len.Pep.1" %in% names(datTab) & "Len.Pep.2" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(Len.Pep.1 = as.integer(Len.Pep.1), 
+                                    Len.Pep.2 = as.integer(Len.Pep.2))
     }
     if ("z" %in% names(datTab)) {
         datTab <- datTab %>% mutate(z = as.integer(z))
