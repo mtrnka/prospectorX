@@ -685,7 +685,7 @@ formatXLTable <- function(datTab) {
         datTab <- datTab %>%
             select(-distance)
     }
-    datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
+    datTab <- datTab[order(datTab$dvals, decreasing = T),]
     datTab <- datTab %>% select(any_of(c("selected", "link", "xlinkedResPair", 
                                 "dvals", "distance", "m.z", "z", "ppm",
                                 "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
