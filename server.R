@@ -151,7 +151,12 @@ function(input, output, session) {
   
   output$numberClassedLinks <- renderText({
     req(tabLevel())
-      str_c("Number of ", input$summaryLevel, ": ", nrow(xlTable()))
+    numIntra <- sum(str_count(xlTable()$xlinkClass, "intraProtein"))
+    numInter <- sum(str_count(xlTable()$xlinkClass, "interProtein"))
+    classRatio <- round(numInter / (numIntra + numInter), 2)
+    str_c("Number of ", input$summaryLevel, ": ", nrow(xlTable()),
+    " intraProtein: ", numIntra, " interProtein: ", numInter,
+    " Ratio: ", classRatio)
   })
   
   output$dataFile <- DT::renderDataTable({

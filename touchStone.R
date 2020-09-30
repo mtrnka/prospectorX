@@ -693,7 +693,7 @@ formatXLTable <- function(datTab) {
                                 "XLink.AA.1", "Protein.1", "Modul.1", "Species.1",
                                 "Acc.2", "XLink.AA.2", "Protein.2", "Modul.2", "Species.2",
                                 "xlinkClass", "Len.Pep.1", "Len.Pep.2",
-                                "Peptide.1", "Peptide.2", "NumCSM",
+                                "Peptide.1", "Peptide.2", "numCSM",
                                 "Fraction", "RT", "MSMS.Info")))
     if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
@@ -720,7 +720,7 @@ formatXLTable <- function(datTab) {
     }
     if ("Fraction" %in% names(datTab)) {
         datTab$Fraction <- gsub("(.*)\\.[^.]+$", "\\1", datTab$Fraction)
-        datTab <- datTab %>% mutate(xlinkClass = factor(Fraction))
+        datTab <- datTab %>% mutate(Fraction = factor(Fraction))
     }
     if ("percMatch" %in% names(datTab)) {
         datTab$percMatch <- round(datTab$percMatch * 100, 2)
