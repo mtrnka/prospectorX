@@ -74,32 +74,6 @@ reduceTo <- function(datTab, category, classifier) {
     return(outTab)
 }
 
-# readModuleFile <- function(modFile) {
-#     inFile <- file(modFile, open="r")
-#     header <- readLines(inFile, n=1)
-#     header <- lineSplit(header)
-#     dataTable <- character(5)
-#     while (T) {
-#         line <- readLines(inFile, n=1)
-#         if (length(line)==0) {break}
-#         line <- lineSplit(line)
-#         if (length(line)==0) {break}
-#         else if (length(line) < 5) {length(line)=5}
-#         dataTable <- rbind(dataTable,line)}
-#     close(inFile)
-#     row.names(dataTable) <- NULL
-#     dataTable <- as.data.frame(dataTable[-1,],stringsAsFactors=F)
-#     names(dataTable) <- header
-#     dataTable <- cleanTypes(dataTable)
-#     modules <- list()
-#     for (subunit in unique(dataTable$Subunit)) {
-#         conv <- dataTable[dataTable$Subunit==subunit,
-#                           c("Range_low","Range_high","Module")]
-#         modules[[subunit]] <- conv[order(conv$Range_low),]
-#     }
-#     return(modules)
-# }
-
 readChainMap <- function(chainFile) {
     chainMap <- read.table(chainFile,header=F,sep="\t",stringsAsFactors=F)
     names(chainMap) <- c("Subunit","Chain")
@@ -185,40 +159,10 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
     return(searchTable)
 }
 
-# populateModules <- function(searchTable, moduleDefinitions) {
-#     print("***populate Modules***")
-#     modules <- list(moduleDefinitions)
-#     pep1.modul <- mapply(
-#         assignModule,
-#         searchTable$XLink.AA.1,
-#         searchTable$Acc.1,
-#         modules)
-#     pep2.modul <- mapply(
-#         assignModule,
-#         searchTable$XLink.AA.2,
-#         searchTable$Acc.2,
-#         modules)
-#     levs <- unlist(sapply(moduleDefinitions, function(x) c(x[3])))
-#     names(levs) <- NULL
-#     levs <- unique(levs)
-#     searchTable$Modul.1 <- factor(unlist(pep1.modul),levels=levs)
-#     searchTable$Modul.2 <- factor(unlist(pep2.modul),levels=levs)
-#     return(searchTable)
-# }
-# 
-# assignModule <- function(seqPosition,protein,modList) {
-#     if (protein %in% names(modList)) {
-#         n <- findInterval(as.integer(seqPosition),
-#                           modList[[as.character(protein)]]$Range_low)
-#         if (n != 0) {
-#             return(modList[[protein]]$Module[n])
-#         } else return(NA)
-#     }
-#     else return(NA)
-# }
-
 assignModules <- function(searchTable, moduleFile) {
     modTab <- read_tsv(moduleFile)
+    modTab <- modTab %>% mutate(Range_low = ifelse(is.na(Range_low), 0, Range_low))
+    modTab <- modTab %>% mutate(Range_high = ifelse(is.na(Range_high), 1000000, Range_high))
     Modul.1 <- searchTable %>% 
         left_join(modTab, by=c("Acc.1"="Subunit")) %>%
         filter(is.na(Range_low) | (XLink.AA.1 >= Range_low & XLink.AA.1 <= Range_high)) %>%
@@ -227,8 +171,6 @@ assignModules <- function(searchTable, moduleFile) {
         left_join(modTab, by=c("Acc.2"="Subunit")) %>%
         filter(is.na(Range_low) | (XLink.AA.2 >= Range_low & XLink.AA.2 <= Range_high)) %>%
         pull("Module")
-    searchTable$Modul.1 <- as_factor(Modul.1)
-    searchTable$Modul.2 <- as_factor(Modul.2)
     return(searchTable)
 }
 
@@ -266,6 +208,7 @@ calculatePairs <- function(searchTable){
 assignXLinkClass <- function(searchTable) {
     intraProteinLinks <- searchTable$Acc.1 == searchTable$Acc.2
     interProteinLinks <- searchTable$Acc.1 != searchTable$Acc.2
+    if (sum(c("Start.1", "Start.2", "End.1", "End.2") %in% names(searchTable)==4)) {
     s1 <- searchTable$Start.1
     s2 <- searchTable$Start.2
     e1 <- searchTable$End.1
@@ -278,6 +221,9 @@ assignXLinkClass <- function(searchTable) {
                                      "interProtein, homomeric",
                                      "intraProtein"),
                                      "interProtein, heteromeric")
+    } else {
+        searchTable$xlinkClass <- ifelse(intraProteinLinks, "intraProtein", "interProtein")
+    }
     return(searchTable)
  }
 
@@ -436,18 +382,18 @@ renameModTable <- function(modTab, oldName, newName) {
     return(modTab)
 }
 
-renumberProtein <-function(dt, protein, shift) {
-    dt[dt$Acc.1==protein,"XLink.AA.1"] <-
-        dt[dt$Acc.1==protein,"XLink.AA.1"] + shift
-    dt[dt$Acc.2==protein,"XLink.AA.2"] <-
-        dt[dt$Acc.2==protein,"XLink.AA.2"] + shift
-    dt <- populateModules(dt, object@modulFile)
-    dt <- calculatePairs(dt)
-    if (is.data.frame(object@caTracedPDB)) {
-        dt <- measureDistances(dt,object@caTracedPDB,object@chainMap)
-    }
-    return(dt)
-}
+# renumberProtein <-function(dt, protein, shift) {
+#     dt[dt$Acc.1==protein,"XLink.AA.1"] <-
+#         dt[dt$Acc.1==protein,"XLink.AA.1"] + shift
+#     dt[dt$Acc.2==protein,"XLink.AA.2"] <-
+#         dt[dt$Acc.2==protein,"XLink.AA.2"] + shift
+#     dt <- assignModules(dt, modulFile)
+#     dt <- calculatePairs(dt)
+#     if (is.data.frame(object@caTracedPDB)) {
+#         dt <- measureDistances(dt,object@caTracedPDB,object@chainMap)
+#     }
+#     return(dt)
+#}
 
 # setGeneric("pairPlot", function(object, color="lightseagreen",
 #                                 removeMods=NA_character_, displayEmpty=T) {
@@ -1331,9 +1277,6 @@ numHitsPlot <- function(num.hits, threshold) {
                         col="red", size=1.5)
     print(p)
 }
-
-#findThreshold(test, targetER=0.01)
-#numHitsPlot(ErrorTable(test), 0.01)
 
 
 

@@ -155,14 +155,23 @@ function(input, output, session) {
     numInter <- sum(str_count(xlTable()$xlinkClass, "interProtein"))
     classRatio <- round(numInter / (numIntra + numInter), 2)
     str_c("Number of ", input$summaryLevel, ": ", nrow(xlTable()),
-    " intraProtein: ", numIntra, " interProtein: ", numInter,
-    " Ratio: ", classRatio)
+    "; intraProtein: ", numIntra, "; interProtein: ", numInter,
+    "; percent interProtein: ", classRatio)
   })
   
   output$dataFile <- DT::renderDataTable({
     req(csmTab())
     displayTable <- formatXLTable(xlTable())
-    wideCols <- which(names(displayTable) %in% c("xlinkeResPair", "DB.Peptide.1", "DB.Peptide.2", "Protein.1", "Protein.2", "Peptide.1", "Peptide.2", "Fraction"))
+    wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
+                                                 "DB.Peptide.1",
+                                                 "DB.Peptide.2",
+                                                 "Protein.1",
+                                                 "Protein.2",
+                                                 "Peptide.1",
+                                                 "Peptide.2",
+                                                 "Modul.1",
+                                                 "Modul.2",
+                                                 "Fraction"))
     DT::datatable(displayTable,
                   options = list(autoWidth=TRUE,
                                  deferRender=TRUE,
