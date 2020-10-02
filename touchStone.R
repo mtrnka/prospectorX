@@ -160,17 +160,49 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
 }
 
 assignModules <- function(searchTable, moduleFile) {
-    modTab <- read_tsv(moduleFile)
-    modTab <- modTab %>% mutate(Range_low = ifelse(is.na(Range_low), 0, Range_low))
-    modTab <- modTab %>% mutate(Range_high = ifelse(is.na(Range_high), 1000000, Range_high))
+    modTab <- read_tsv(moduleFile) %>% group_by(Subunit) %>% nest()
     Modul.1 <- searchTable %>% 
-        left_join(modTab, by=c("Acc.1"="Subunit")) %>%
-        filter(is.na(Range_low) | (XLink.AA.1 >= Range_low & XLink.AA.1 <= Range_high)) %>%
-        pull("Module")
+        mutate(XLink.AA.1 = ifelse(XLinka.AA.1 == 0, 1, XLinka.AA.1)) %>%
+        left_join(modTab, by=c("Acc.1"="Subunit")) %>% 
+        mutate(data = map2(data, XLink.AA.1, function(df, x) {
+            if (is.null(df)) {
+                return(NULL)
+            } else {
+                df$inRange = map2_lgl(df$Range_low, df$Range_high, between, x=x)
+                if (sum(df$inRange, na.rm=T) >= 1) {
+                    df <- filter(df, inRange) %>% slice(1)
+                } else if (sum(is.na(df$inRange)) >= 1) {
+                    df <- filter(df, is.na(inRange)) %>% slice(1)
+                } else {
+                    df <- df %>% slice(1)
+                }
+                return(df)
+            }
+        })) %>% 
+        unnest(data, keep_empty=T) %>%
+        pull(Module)
     Modul.2 <- searchTable %>% 
-        left_join(modTab, by=c("Acc.2"="Subunit")) %>%
-        filter(is.na(Range_low) | (XLink.AA.2 >= Range_low & XLink.AA.2 <= Range_high)) %>%
-        pull("Module")
+        mutate(XLink.AA.1 = ifelse(XLinka.AA.1 == 0, 1, XLinka.AA.1)) %>%
+        left_join(modTab, by=c("Acc.2"="Subunit")) %>% 
+        mutate(data = map2(data, XLink.AA.2, function(df, x) {
+            if (is.null(df)) {
+                return(NULL)
+            } else {
+                df$inRange = map2_lgl(df$Range_low, df$Range_high, between, x=x)
+                if (sum(df$inRange, na.rm=T) >= 1) {
+                    df <- filter(df, inRange) %>% slice(1)
+                } else if (sum(is.na(df$inRange)) >= 1) {
+                    df <- filter(df, is.na(inRange)) %>% slice(1)
+                } else {
+                    df <- df %>% slice(1)
+                }
+                return(df)
+            }
+        })) %>% 
+        unnest(data, keep_empty=T) %>%
+        pull(Module)
+    searchTable$Modul.1 <- Modul.1
+    searchTable$Modul.2 <- Modul.2
     return(searchTable)
 }
 
