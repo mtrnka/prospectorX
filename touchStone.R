@@ -133,11 +133,14 @@ multiEuclideanDistance <- function(parsedPDB, residue1, chain1, residue2, chain2
 }
 
 measureDistances <- function(searchTable, parsedPDB, chainMap) {
-#    searchTable <- searchTable[searchTable$Decoy == "Target",]
+    #    searchTable <- searchTable[searchTable$Decoy == "Target",]
     print("***measureDistances***")
     chainLookup <- function(proteinName) {
-        if (grepl("r[0-9]\\_",proteinName)) {
+        if (grepl("r[0-9]\\_", proteinName)) {
             return ("Dec")
+        } else if (grepl("decoy", proteinName)) {
+            return ("Dec")
+            
         } else if (is.null(chainMap[[proteinName]])) {
             return("")
         } else {chain <- chainMap[[proteinName]]
@@ -145,8 +148,8 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
         }
     }
     pdbList <- list(parsedPDB)
-    chains1 <- vapply(searchTable$Protein.1, chainLookup, FUN.VALUE="")
-    chains2 <- vapply(searchTable$Protein.2, chainLookup, FUN.VALUE="")
+    chains1 <- vapply(searchTable$Acc.1, chainLookup, FUN.VALUE="")
+    chains2 <- vapply(searchTable$Acc.2, chainLookup, FUN.VALUE="")
     distance <- mapply(
         multiEuclideanDistance,
         pdbList,
@@ -162,7 +165,7 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
 assignModules <- function(searchTable, moduleFile) {
     modTab <- read_tsv(moduleFile) %>% group_by(Subunit) %>% nest()
     Modul.1 <- searchTable %>% 
-        mutate(XLink.AA.1 = ifelse(XLinka.AA.1 == 0, 1, XLinka.AA.1)) %>%
+        mutate(XLink.AA.1 = ifelse(XLink.AA.1 == 0, 1, XLink.AA.1)) %>%
         left_join(modTab, by=c("Acc.1"="Subunit")) %>% 
         mutate(data = map2(data, XLink.AA.1, function(df, x) {
             if (is.null(df)) {
@@ -182,7 +185,7 @@ assignModules <- function(searchTable, moduleFile) {
         unnest(data, keep_empty=T) %>%
         pull(Module)
     Modul.2 <- searchTable %>% 
-        mutate(XLink.AA.1 = ifelse(XLinka.AA.1 == 0, 1, XLinka.AA.1)) %>%
+        mutate(XLink.AA.1 = ifelse(XLink.AA.2 == 0, 1, XLink.AA.2)) %>%
         left_join(modTab, by=c("Acc.2"="Subunit")) %>% 
         mutate(data = map2(data, XLink.AA.2, function(df, x) {
             if (is.null(df)) {
