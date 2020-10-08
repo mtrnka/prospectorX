@@ -96,36 +96,45 @@ fluidPage(
                          verbatimTextOutput("numberClassedLinks"),
                          fluidRow(
                              column(4,
-                                    verbatimTextOutput("FDR"),
                                     plotOutput("FDRplot"),
-                                    verbatimTextOutput("IIratio"),
-                                    plotOutput("thresholdPlot")
+                                    verbatimTextOutput("FDR")
                              ),
                              column(4,
-                                    verbatimTextOutput("meanError"),
                                     plotOutput("massErrorPlot"),
-                                    verbatimTextOutput("protHover"),
+                                    verbatimTextOutput("meanError")
+                             ),
+                            column(4,
+                                   plotOutput("distancePlot"),
+                                   verbatimTextOutput("VR")
+                            )
+                         ),
+                         br(),
+                         fluidRow(
+                             column(4,
+                                    plotOutput("thresholdPlot"),
+                                    verbatimTextOutput("IIratio")
+                             ),
+                             column(4,
                                     plotOutput("proteinPlot",
                                                click = "plot_click",
                                                hover = "prot_hover"
-                            #                   brush = brushOpts(
-                             #                      id = "protPlot_brush"
-                              #                 )
-                                    )
+                                               #                   brush = brushOpts(
+                                               #                      id = "protPlot_brush"
+                                               #                 )
+                                    ),
+                                    verbatimTextOutput("protHover")
                              ),
-                            column(4,
-                                   verbatimTextOutput("VR"),
-                                   plotOutput("distancePlot"),
-                                   verbatimTextOutput("modHover"),
-                                   plotOutput("modulePlot",
-                                              click = "plot_click",
-                                              hover = "mod_hover"
-                                              # brush = brushOpts(
-                                              #     id = "modPlot_brush"
-                                              # )
-                                   )
-                            )
-                         ),
+                             column(4,
+                                    plotOutput("modulePlot",
+                                               click = "plot_click",
+                                               hover = "mod_hover"
+                                               # brush = brushOpts(
+                                               #     id = "modPlot_brush"
+                                               # )
+                                    ),
+                                    verbatimTextOutput("modHover"),
+                             )
+                         )
                 ),
                 tabPanel("Crosslink Table",
                          fluidRow(

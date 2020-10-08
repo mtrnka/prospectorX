@@ -340,17 +340,13 @@ function(input, output, session) {
       scale_size(range = c(-1, 12)) +
       scale_color_viridis_c(option="D") +
       theme_bw() + 
-      theme(axis.text.x = element_text(angle=90, hjust=1))
+      theme(axis.text.x = element_text(angle=90, hjust=1),
+            axis.title.x = element_blank(), axis.title.y = element_blank(),
+            plot.title = element_text(face = "bold", size = 14)) +
+      ggtitle("Protein Pairs")
   })
 
-    xlTableSelected <- reactive({
-    req(xlTable(), input$plot_click)
-    xlTable() %>% filter((Acc.1 == protFilter()[1] & Acc.2 == protFilter()[2]) |
-                           (Acc.1 == protFilter()[2] & Acc.2 == protFilter()[1]),
-    )
-  })
-  
-    xlTableSelected <- reactiveVal()
+  xlTableSelected <- reactiveVal()
     protFilter <- reactiveVal()
     observeEvent(req(input$plot_click), {
       if (str_detect(input$plot_click$mapping$x, "Acc")) {
@@ -401,6 +397,9 @@ function(input, output, session) {
       scale_size(range = c(-1, 12)) +
       scale_color_viridis_c(option="D") +
       theme_bw() + 
-      theme(axis.text.x = element_text(angle=90, hjust=1))
+      theme(axis.text.x = element_text(angle=90, hjust=1),
+            axis.title.x = element_blank(), axis.title.y = element_blank(),
+            plot.title = element_text(face = "bold", size = 14)) +
+      ggtitle("Module Pairs")
   })
 }

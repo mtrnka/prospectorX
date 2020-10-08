@@ -1206,10 +1206,12 @@ numHitsPlot <- function(num.hits, threshold) {
     p <- num.hits %>% ggplot(aes(x=fdr, y=numHits)) +
         geom_line(aes(col=crosslinkClass), na.rm=T) +
         theme_bw() +
-        theme(legend.position="top") +
+        theme(legend.position="right") +
         scale_color_brewer(type="qual", palette="Set1") +
         xlab("FDR") +
-        ylab("Num Hits")
+        ylab("Num Hits") +
+        ggtitle("Num Hits vs FDR") +
+        theme(plot.title = element_text(face = "bold", size = 14))
     p <- p + geom_vline(xintercept = threshold,
                         col="red", size=1.25)
     print(p)
