@@ -98,29 +98,32 @@ fluidPage(
                              column(4,
                                     verbatimTextOutput("FDR"),
                                     plotOutput("FDRplot"),
+                                    verbatimTextOutput("IIratio"),
                                     plotOutput("thresholdPlot")
                              ),
                              column(4,
                                     verbatimTextOutput("meanError"),
                                     plotOutput("massErrorPlot"),
+                                    verbatimTextOutput("protHover"),
                                     plotOutput("proteinPlot",
-                                               click = "protPlot_click"#,
+                                               click = "plot_click",
+                                               hover = "prot_hover"
                             #                   brush = brushOpts(
                              #                      id = "protPlot_brush"
                               #                 )
-                                    ),
-                                    verbatimTextOutput("clicked")
+                                    )
                              ),
                             column(4,
                                    verbatimTextOutput("VR"),
                                    plotOutput("distancePlot"),
+                                   verbatimTextOutput("modHover"),
                                    plotOutput("modulePlot",
-                                              click = "modPlot_click"#,
+                                              click = "plot_click",
+                                              hover = "mod_hover"
                                               # brush = brushOpts(
                                               #     id = "modPlot_brush"
                                               # )
-                                   ),
-                                   verbatimTextOutput("modClicked")
+                                   )
                             )
                          ),
                 ),

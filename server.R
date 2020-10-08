@@ -162,14 +162,14 @@ function(input, output, session) {
       filter(Decoy=="Target", dvals >= input$svmThreshold)
   })
   
+  classRatio <- reactiveVal()
   output$numberClassedLinks <- renderText({
     req(tabLevel())
     numIntra <- sum(str_count(xlTable()$xlinkClass, "intraProtein"))
     numInter <- sum(str_count(xlTable()$xlinkClass, "interProtein"))
-    classRatio <- round(numInter / (numIntra + numInter), 2)
+    classRatio(round(numInter / (numIntra + numInter), 2))
     str_c("Number of ", input$summaryLevel, ": ", nrow(xlTable()),
-    "; intraProtein: ", numIntra, "; interProtein: ", numInter,
-    "; percent interProtein: ", classRatio)
+    "; intraProtein: ", numIntra, "; interProtein: ", numInter)
   })
   
   output$dataFile <- DT::renderDataTable({
@@ -258,6 +258,10 @@ function(input, output, session) {
     updateSliderInput(session, "svmThreshold", value = threshold[[1]])
   })
 
+  output$IIratio <- renderText({
+    str_c("percent interProtein: ", classRatio())
+  })
+  
   output$thresholdPlot <- renderPlot({
     req(numHits())
     numHitsPlot(numHits(), fdr())
@@ -272,8 +276,7 @@ function(input, output, session) {
   targetDists <- reactive({
     req(tabLevel())
     if (sum(is.na(tabLevel()$distance)) == nrow(tabLevel())) return(NULL)
-    tabLevelFiltered() %>% 
-      filter(Decoy=="Target", dvals >= input$svmThreshold, !is.na(distance)) %>%
+    xlTable() %>% 
       pull(distance)
   })
 
@@ -338,57 +341,56 @@ function(input, output, session) {
       theme(axis.text.x = element_text(angle=90, hjust=1))
   })
 
-  protFilter <- reactiveVal()
-  observe({protFilter(
-    nearPoints(summaryProtData(), input$protPlot_click, threshold = 10) %>%
-      select(starts_with("Acc")) %>% 
-      slice(1) %>%
-      as.character
-  )
-    if(nrow(xlTableSelected()) >= 1)
-      updateTabsetPanel(session, "navbar", selected = "Selected Crosslinks")
-  })
-
-  modFilter <- reactiveVal()
-  observe({modFilter(
-    nearPoints(summaryModulData(), input$modPlot_click, threshold = 10) %>%
-      select(starts_with("Modul")) %>% 
-      slice(1) %>%
-      as.character
-  )
-    # if(nrow(xlTableSelected()) >= 1)
-    #   updateTabsetPanel(session, "navbar", selected = "Selected Crosslinks")
-  })
-
-  # observe({
-  #   input$protPlot_click
-  #   xlTable() %>% filter((Acc.1 == protFilter()[1] & Acc.2 == protFilter()[2]) |
-  #                          (Acc.1 == protFilter()[2] & Acc.2 == protFilter()[1]))
-  # })
-
-  # observe({
-  #   input$modPlot_click
-  #   xlTable() %>% filter((Modul.1 == modFilter()[1] & Modul.2 == modFilter()[2]) |
-  #                          (Modul.1 == modFilter()[2] & Modul.2 == modFilter()[1]))
-  # })
-  
-  xlTableSelected <- reactive({
-    req(xlTable())
+    xlTableSelected <- reactive({
+    req(xlTable(), input$plot_click)
     xlTable() %>% filter((Acc.1 == protFilter()[1] & Acc.2 == protFilter()[2]) |
                            (Acc.1 == protFilter()[2] & Acc.2 == protFilter()[1]),
     )
   })
   
-  output$clicked <- renderPrint({
-    req(xlTable())
-    cat(protFilter())
-  })
+    xlTableSelected <- reactiveVal()
+    protFilter <- reactiveVal()
+    observeEvent(req(input$plot_click), {
+      if (str_detect(input$plot_click$mapping$x, "Acc")) {
+        protFilter(nearPoints(summaryProtData(), input$plot_click, threshold = 10) %>%
+                     select(starts_with("Acc")) %>% 
+                     slice(1) %>%
+                     as.character
+        )
+        xlTableSelected(
+          xlTable() %>% filter((Acc.1 == protFilter()[1] & Acc.2 == protFilter()[2]) |
+                                 (Acc.1 == protFilter()[2] & Acc.2 == protFilter()[1]))
+        )
+      } else if (str_detect(input$plot_click$mapping$x, "Modul")) {
+        protFilter(nearPoints(summaryModulData(), input$plot_click, threshold = 10) %>%
+                     select(starts_with("Modul")) %>%
+                     slice(1) %>%
+                     as.character
+        )
+        xlTableSelected(
+          xlTable() %>% filter((Modul.1 == protFilter()[1] & Modul.2 == protFilter()[2]) |
+                                 (Modul.1 == protFilter()[2] & Modul.2 == protFilter()[1]))
+        )
+      }
+      updateTabsetPanel(session, "navbar", selected = "Selected Crosslinks")
+    })
 
-  output$modClicked <- renderPrint({
+  output$protHover <- renderText({
     req(xlTable())
-    cat(modFilter())
+    nearPoints(summaryProtData(), input$prot_hover) %>%
+      select(starts_with("Acc")) %>%
+      slice(1) %>%
+      as.character
   })
-
+  
+  output$modHover <- renderText({
+    req(xlTable())
+    nearPoints(summaryModulData(), input$mod_hover) %>%
+      select(starts_with("Modul")) %>%
+      slice(1) %>%
+      as.character
+  })
+  
   output$modulePlot <- renderPlot({
     req(summaryModulData)
     summaryModulData() %>% 

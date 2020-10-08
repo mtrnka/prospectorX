@@ -143,7 +143,8 @@ assignModules <- function(searchTable, moduleFile) {
             }
         })) %>% 
         unnest(data, keep_empty=T) %>%
-        pull(Module)
+        pull(Module) %>%
+        replace_na("unknown")
     Modul.2 <- searchTable %>% 
         mutate(XLink.AA.1 = ifelse(XLink.AA.2 == 0, 1, XLink.AA.2)) %>%
         left_join(modTab, by=c("Acc.2"="Subunit")) %>% 
@@ -163,7 +164,8 @@ assignModules <- function(searchTable, moduleFile) {
             }
         })) %>% 
         unnest(data, keep_empty=T) %>%
-        pull(Module)
+        pull(Module) %>%
+        replace_na("unknown")
     searchTable$xlinkedModulPair <- ifelse(Modul.1 <= Modul.2,
                                            paste(Modul.1, Modul.2, sep="::"),
                                            paste(Modul.2, Modul.1, sep="::"))
@@ -1171,7 +1173,7 @@ getRandomCrosslinks <- function(pdbFile, numCrosslinks) {
 massErrorPlot <- function(massErrors, lowThresh, highThresh, lowPlotRange, highPlotRange) {
     hist(massErrors, col="slategray3", 
          xlim=c(lowPlotRange, highPlotRange), 
-         breaks=seq(lowPlotRange, highPlotRange, 0.5),
+         breaks=seq(lowPlotRange, highPlotRange, 1),
          xlab = "Mass Error (ppm)",
          main = "Precursor Mass Deviation")
     abline(v = c(lowThresh, highThresh), lwd = 2, lt = 1, col = "red")
@@ -1209,7 +1211,7 @@ numHitsPlot <- function(num.hits, threshold) {
         xlab("FDR") +
         ylab("Num Hits")
     p <- p + geom_vline(xintercept = threshold,
-                        col="red", size=1.5)
+                        col="red", size=1.25)
     print(p)
 }
 
