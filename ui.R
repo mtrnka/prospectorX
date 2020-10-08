@@ -51,10 +51,9 @@ fluidPage(
                      ),
                      selectInput("summaryLevel", label = h4("Summarization Level"),
                                  choices = list("CSMs",
-                                                "Unique Residue Pairs")#,
-                                 # "Protein Pairs",
-                                 # "Domains",
-                                 # "Modules")
+                                                "Unique Residue Pairs",
+                                                "Protein Pairs",
+                                                "Module Pairs")
                      ),
                      column(4, style='padding:0px; margin:0px',
                             br(), br(),
@@ -74,10 +73,10 @@ fluidPage(
                                             step = 0.1, value = 0),
                                 br(),
                                 sliderInput("scoreDiffThreshold", "Min. Score.Diff", min = 0, max = 30,
-                                            step = 0.5, value = 0),
+                                            step = 0.5, value = 5),
                                 br(),
                                 sliderInput("peptideLengthFilter", "Peptide Length", min = 3, max = 35,
-                                            step = 1, value = c(4, 25))
+                                            step = 1, value = c(4, 30))
                          ),
                          column(6,
                                 sliderInput("ms1MassError", "Prec Mass Error", min = -20, max = 20,
@@ -103,17 +102,36 @@ fluidPage(
                              ),
                              column(4,
                                     verbatimTextOutput("meanError"),
-                                    plotOutput("massErrorPlot")
+                                    plotOutput("massErrorPlot"),
+                                    plotOutput("proteinPlot",
+                                               click = "protPlot_click"#,
+                            #                   brush = brushOpts(
+                             #                      id = "protPlot_brush"
+                              #                 )
+                                    ),
+                                    verbatimTextOutput("clicked")
                              ),
-                             column(4,
-                                    verbatimTextOutput("VR"),
-                                    plotOutput("distancePlot")
-                             )
+                            column(4,
+                                   verbatimTextOutput("VR"),
+                                   plotOutput("distancePlot"),
+                                   plotOutput("modulePlot",
+                                              click = "modPlot_click"#,
+                                              # brush = brushOpts(
+                                              #     id = "modPlot_brush"
+                                              # )
+                                   ),
+                                   verbatimTextOutput("modClicked")
+                            )
                          ),
                 ),
                 tabPanel("Crosslink Table",
                          fluidRow(
                              DT::dataTableOutput("dataFile")
+                         )
+                ),
+                tabPanel("Selected Crosslinks",
+                         fluidRow(
+                             DT::dataTableOutput("dataFileSelected")
                          )
                 )
             )

@@ -124,14 +124,27 @@ function(input, output, session) {
 
   clTab <- reactive({
     consoleMessage("*** Calculating Residue-Pairs ***")
-    bestResPairHackDT(csmTab())
+    bestResPair(csmTab())
+  })
+  
+  plTab <- reactive({
+    consoleMessage("*** Calculating Protein-Pairs ***")
+    bestProtPair(csmTab())
+  })
+  
+  modTab <- reactive({
+    req(moduleFile())
+    consoleMessage("*** Calculating Module-Pairs ***")
+    bestModPair(csmTab())
   })
   
   tabLevel <- reactive({
     req(csmTab())
     switch(input$summaryLevel,
            "CSMs" = csmTab(),
-           "Unique Residue Pairs" = clTab()
+           "Unique Residue Pairs" = clTab(),
+           "Protein Pairs" = plTab(),
+           "Module Pairs" = modTab()
     )
   })
   
@@ -191,6 +204,38 @@ function(input, output, session) {
     )
   })
   
+  output$dataFileSelected <- DT::renderDataTable({
+    req(csmTab())
+    displayTable <- formatXLTable(xlTableSelected())
+    wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
+                                                 "DB.Peptide.1",
+                                                 "DB.Peptide.2",
+                                                 "Protein.1",
+                                                 "Protein.2",
+                                                 "Peptide.1",
+                                                 "Peptide.2",
+                                                 "Modul.1",
+                                                 "Modul.2",
+                                                 "Fraction"))
+    DT::datatable(displayTable,
+                  options = list(autoWidth=TRUE,
+                                 deferRender=TRUE,
+                                 processing=TRUE,
+                                 columnDefs=list(list(width = '200px', targets = as.list(wideCols))),
+                                 #                                 columnDefs=list(list(width = '200px', targets = c(3,7,8,17,21,26,27))),
+                                 scrollX=TRUE,
+                                 scrollY="80vh",
+                                 scrollCollapse=TRUE,
+                                 paging=TRUE,
+                                 pageLength=100,
+                                 search.caseInsensitive=TRUE,
+                                 scroller=TRUE
+                  ),
+                  filter="top",
+                  escape=FALSE
+    )
+  })
+
   fdr <- reactiveVal()
   observe({fdr(calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold))})
 
@@ -270,5 +315,88 @@ function(input, output, session) {
     req(pdbFile(), targetDists())
     sliderInput("distanceThreshold", "Violation Dist.", min = 0, max = 100,
                 step = 1, value = 30) 
+  })
+
+  summaryProtData <- reactive({
+    req(csmTab())
+    summarizeProtData(xlTable())
+  })
+  
+  summaryModulData <- reactive({
+    req(moduleFile())
+    summarizeModuleData(xlTable())
+  })
+  
+  output$proteinPlot <- renderPlot({
+    req(summaryProtData())
+    summaryProtData() %>% 
+      ggplot(aes(Acc.1, Acc.2, size=counts, col=counts)) + 
+      geom_point(na.rm=T) +
+      scale_size(range = c(-1, 12)) +
+      scale_color_viridis_c(option="D") +
+      theme_bw() + 
+      theme(axis.text.x = element_text(angle=90, hjust=1))
+  })
+
+  protFilter <- reactiveVal()
+  observe({protFilter(
+    nearPoints(summaryProtData(), input$protPlot_click, threshold = 10) %>%
+      select(starts_with("Acc")) %>% 
+      slice(1) %>%
+      as.character
+  )
+    if(nrow(xlTableSelected()) >= 1)
+      updateTabsetPanel(session, "navbar", selected = "Selected Crosslinks")
+  })
+
+  modFilter <- reactiveVal()
+  observe({modFilter(
+    nearPoints(summaryModulData(), input$modPlot_click, threshold = 10) %>%
+      select(starts_with("Modul")) %>% 
+      slice(1) %>%
+      as.character
+  )
+    # if(nrow(xlTableSelected()) >= 1)
+    #   updateTabsetPanel(session, "navbar", selected = "Selected Crosslinks")
+  })
+
+  # observe({
+  #   input$protPlot_click
+  #   xlTable() %>% filter((Acc.1 == protFilter()[1] & Acc.2 == protFilter()[2]) |
+  #                          (Acc.1 == protFilter()[2] & Acc.2 == protFilter()[1]))
+  # })
+
+  # observe({
+  #   input$modPlot_click
+  #   xlTable() %>% filter((Modul.1 == modFilter()[1] & Modul.2 == modFilter()[2]) |
+  #                          (Modul.1 == modFilter()[2] & Modul.2 == modFilter()[1]))
+  # })
+  
+  xlTableSelected <- reactive({
+    req(xlTable())
+    xlTable() %>% filter((Acc.1 == protFilter()[1] & Acc.2 == protFilter()[2]) |
+                           (Acc.1 == protFilter()[2] & Acc.2 == protFilter()[1]),
+    )
+  })
+  
+  output$clicked <- renderPrint({
+    req(xlTable())
+    cat(protFilter())
+  })
+
+  output$modClicked <- renderPrint({
+    req(xlTable())
+    cat(modFilter())
+  })
+
+  output$modulePlot <- renderPlot({
+    req(summaryModulData)
+    summaryModulData() %>% 
+      ggplot(aes(Modul.1, Modul.2, size=counts, col=counts)) + 
+      geom_point(na.rm=T) +
+      scale_size(range = c(-1, 12)) +
+      scale_color_viridis_c(option="D") +
+      theme_bw() + 
+      theme(axis.text.x = element_text(angle=90, hjust=1))
   })
 }

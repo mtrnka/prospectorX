@@ -33,47 +33,6 @@ readProspectorXLOutput <- function(inputFile){
     return(dataTable)
 }
 
-bestResPair <- function(datTab, classifier=c("Score.Diff", "Score", "MSMS.Info")) {
-    datTabR <- datTab
-    xlinks <- unique(datTab$xlinkedResPair)
-    for (param in classifier) {
-        if (param %in% names(datTabR)) {
-            datTabR <- reduceTo(datTabR, "xlinkedResPair", param)
-        }
-    }
-    cat(c(nrow(datTabR), length(xlinks),
-          sum(datTabR$num), nrow(datTab), "\n"), sep="\t")
-    return(datTabR)
-}
-
-reduceTo <- function(datTab, category, classifier) {
-    if (class(datTab[[classifier]]) == "factor") {
-        datTab[[classifier]] = as.character(datTab[[classifier]])
-    }
-    bestScores <- aggregate(datTab[[classifier]] ~ datTab[[category]], data=datTab, max)
-    names(bestScores) <- c(category, classifier)
-    outTab <- merge(bestScores, datTab, by=c(category, classifier))
-    if (!("num" %in% colnames(outTab))) {
-        xlinks <- table(datTab[[category]])
-        outTab$num <- sapply(outTab[[category]], function(x) xlinks[x])
-    }
-    if ("Area.Pk.1" %in% colnames(outTab) & "Area.Pk.2" %in% colnames(outTab)) {
-        xlinks <- aggregate(cbind(datTab$Area.Pk.1, datTab$Area.Pk.2) ~ 
-                                datTab[[category]], data=datTab, sum)
-        row.names(xlinks) <- xlinks[,1]
-        outTab$Area.Pk.1 <- sapply(outTab[[category]], function(x) xlinks[x, 2])
-        outTab$Area.Pk.2 <- sapply(outTab[[category]], function(x) xlinks[x, 3])
-    }
-    if ("Int.Pk.1" %in% colnames(outTab) & "Int.Pk.2" %in% colnames(outTab)) {
-        xlinks <- aggregate(cbind(datTab$Int.Pk.1, datTab$Int.Pk.2) ~ 
-                                datTab[[category]], data=datTab, sum)
-        row.names(xlinks) <- xlinks[,1]
-        outTab$Int.Pk.1 <- sapply(outTab[[category]], function(x) xlinks[x, 2])
-        outTab$Int.Pk.2 <- sapply(outTab[[category]], function(x) xlinks[x, 3])
-    }
-    return(outTab)
-}
-
 readChainMap <- function(chainFile) {
     chainMap <- read.table(chainFile,header=F,sep="\t",stringsAsFactors=F)
     names(chainMap) <- c("Subunit","Chain")
@@ -101,7 +60,7 @@ parsePDB <- function(pdbAcc) {
 
 euclideanDistance <- function(parsedPDB, residue1, chain1, residue2, chain2) {
     if (chain1 == "Dec" | chain2 == "Dec") {
-        return(sample(0:250, 1, replace=F))
+        return(NA)
     }
     coord1 <- parsedPDB[parsedPDB$chain==chain1 & parsedPDB$resno==residue1,
                         c("x","y","z")]
@@ -140,7 +99,6 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
             return ("Dec")
         } else if (grepl("decoy", proteinName)) {
             return ("Dec")
-            
         } else if (is.null(chainMap[[proteinName]])) {
             return("")
         } else {chain <- chainMap[[proteinName]]
@@ -148,8 +106,10 @@ measureDistances <- function(searchTable, parsedPDB, chainMap) {
         }
     }
     pdbList <- list(parsedPDB)
-    chains1 <- vapply(searchTable$Acc.1, chainLookup, FUN.VALUE="")
-    chains2 <- vapply(searchTable$Acc.2, chainLookup, FUN.VALUE="")
+    Acc.1 <- as.character(searchTable$Acc.1)
+    Acc.2 <- as.character(searchTable$Acc.2)
+    chains1 <- vapply(Acc.1, chainLookup, FUN.VALUE="")
+    chains2 <- vapply(Acc.2, chainLookup, FUN.VALUE="")
     distance <- mapply(
         multiEuclideanDistance,
         pdbList,
@@ -204,8 +164,14 @@ assignModules <- function(searchTable, moduleFile) {
         })) %>% 
         unnest(data, keep_empty=T) %>%
         pull(Module)
-    searchTable$Modul.1 <- Modul.1
-    searchTable$Modul.2 <- Modul.2
+    searchTable$xlinkedModulPair <- ifelse(Modul.1 <= Modul.2,
+                                           paste(Modul.1, Modul.2, sep="::"),
+                                           paste(Modul.2, Modul.1, sep="::"))
+    searchTable$xlinkedModulPair <- as.factor(searchTable$xlinkedModulPair)
+    mods <- unique(c(Modul.1, Modul.2)) %>% str_sort()
+    searchTable$Modul.1 <- factor(Modul.1, levels = mods)
+    searchTable$Modul.2 <- factor(Modul.2, levels = mods)
+    searchTable <- searchTable %>% add_count(xlinkedModulPair, name="numMPSM")
     return(searchTable)
 }
 
@@ -226,17 +192,21 @@ calculateDecoys <- function(searchTable) {
 }
 
 calculatePairs <- function(searchTable){
+    searchTable$xlinkedProtPair <- ifelse(searchTable$Acc.1 <= searchTable$Acc.2,
+                                          paste(searchTable$Acc.1, searchTable$Acc.2, sep="::"),
+                                          paste(searchTable$Acc.2, searchTable$Acc.1, sep="::"))
+    accs <- unique(c(searchTable$Acc.1, searchTable$Acc.2)) %>% str_sort()
+    searchTable <- searchTable %>% mutate(Acc.1 = factor(Acc.1, levels = accs),
+                                          Acc.2 = factor(Acc.2, levels = accs))
     searchTable$Res.1 <- paste(searchTable$XLink.AA.1, searchTable$Acc.1, sep=".")
     searchTable$Res.2 <- paste(searchTable$XLink.AA.2, searchTable$Acc.2, sep=".")
     searchTable$xlinkedResPair <- ifelse(searchTable$Res.1 <= searchTable$Res.2, 
                                          paste(searchTable$Res.1, searchTable$Res.2, sep="::"),
                                          paste(searchTable$Res.2, searchTable$Res.1, sep="::"))
     searchTable$xlinkedResPair <- as.factor(searchTable$xlinkedResPair)
-    searchTable$xlinkedPepPair <- ifelse(searchTable$DB.Peptide.1 <= searchTable$DB.Peptide.2,
-                                         paste(searchTable$DB.Peptide.1, searchTable$DB.Peptide.2, sep="::"),
-                                         paste(searchTable$DB.Peptide.2, searchTable$DB.Peptide.1, sep="::"))
-    searchTable$xlinkedPepPair <- as.factor(searchTable$xlinkedPepPair)
+    searchTable$xlinkedProtPair <- as.factor(searchTable$xlinkedProtPair)
     searchTable <- searchTable %>% add_count(xlinkedResPair, name="numCSM")
+    searchTable <- searchTable %>% add_count(xlinkedProtPair, name="numPPSM")
     return(searchTable)
 }
 
@@ -285,24 +255,6 @@ lengthFilter <- function(searchTable, minLen, maxLen) {
 scoreFilter <- function(searchTable, minScore=0) {
     searchTable <- searchTable[searchTable$Sc.1 >= minScore & searchTable$Sc.2 >= minScore,]
     return(searchTable)
-}
-
-# lineSplit <- function(line) {
-#     l <- nchar(line)
-#     g <- gregexpr("\t",line)[[1]]
-#     gl <- g[length(g)]
-#     if (l == gl) {
-#         return(c(unlist(strsplit(line,"\t")),""))
-#     } else {
-#         return(unlist(strsplit(line,"\t")))
-#     }
-# }
-
-cleanTypes <- function(dataTable) {
-    return(as.data.frame(
-        lapply(dataTable, function(x) {
-            type.convert(x, as.is=TRUE)}),
-        stringsAsFactors=FALSE))
 }
 
 calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFactor=10) {
@@ -566,62 +518,6 @@ buildClassifier <- function(datTab) {
     return(datTab)
 }
 
-# setGeneric("makeFilteredPeaklists", function(object, inputPeaklistDir, outputPeaklistDir) {
-#     standardGeneric("makeFilteredPeaklists")
-# }
-# )
-# 
-# setMethod("makeFilteredPeaklists", "PPsearchCompareXL",
-#           function(object, inputPeaklistDir, outputPeaklistDir){
-#               cwd <- getwd()
-#               setwd(inputPeaklistDir)
-#               datTab <- object@dataTable
-#               fileNames <- unique(datTab$Fraction)
-#               for (file in fileNames) {
-#                   subTab <- datTab[datTab$Fraction == file,"MSMS.Info"]
-#                   spectra <- sapply(subTab, extractSpecFromMGFpd, file)
-#                   outFileName <- paste(outputPeaklistDir, "/", file, sep="")
-#                   spectra <- spectra[order(subTab)]
-#                   cat(spectra, file=outFileName, sep="\n")
-#               }
-#               datTab <- formatMSViewerFile(datTab)
-#               outFileName <- paste(outputPeaklistDir, "/", "filteredPeakList.txt", sep="")
-#               write.table(datTab,outFileName,sep="\t",quote=F,row.names=F)
-#               setwd(cwd)
-#           }
-# )
-
-formatMSViewerFile <- function(datTab) {
-    require(stringr)
-    if ("percMatch" %in% names(datTab)) {
-        datTab$percMatch <- round(datTab$percMatch * 100, 2)
-    }
-    datTab$dvals <- round(datTab$dvals, 2)
-    datTab$Spectrum <- 1
-    datTab <- datTab[order(datTab$Fraction, datTab$MSMS.Info),]
-    dupeDF <- datTab[,c("Fraction", "RT")]
-    dupeDF$RT <- round(dupeDF$RT * 60, 0)
-    dupes <- which(duplicated(dupeDF))
-    datTab[dupes, "Spectrum"] <- 2
-    datTab$Fraction <- gsub("(.*)\\.[^.]+$", "\\1", datTab$Fraction)
-    names(datTab) <- gsub("Peptide\\.([[:digit:]])", "Peptide \\1", names(datTab))
-    names(datTab) <- gsub("m.z", "m/z", names(datTab))
-    annoyingColumns <- str_which(names(datTab), "(Int|Dec)[a-z]{2}\\.[[1-2]]")
-    datTab <- datTab[, -annoyingColumns]
-    datTab <- datTab[order(datTab$dvals, decreasing = T),]
-    return(datTab)
-}
-
-extractSpecFromMGFpd <- function(scanNo, mgfFile) {
-    require(readr)
-    print(paste(scanNo, mgfFile, sep="\t"))
-    startLine <- getLineNos(mgfFile, scanNo) - 5
-    spectrum <- read_lines(mgfFile, skip= startLine -1, n_max=10000)
-    endLine <- grep("END IONS", spectrum)[1]
-    spectrum <- paste(c(spectrum[1:endLine],""), sep="", collapse="\n")
-    return(spectrum)
-}
-
 generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, spectrum) {
     if(!str_detect(fraction, "\\.[[a-z]]$")) {
         fraction <- paste0(fraction, ".mgf")
@@ -660,41 +556,37 @@ formatXLTable <- function(datTab) {
         select(-starts_with("Res"),
                -starts_with("Decoy"),
                -starts_with("Num\\."),
-               -massError,
-               -xlinkedPepPair)
+               -massError)
     if (sum(!is.na(datTab$distance)) == 0) {
         datTab <- datTab %>%
             select(-distance)
     }
     datTab <- datTab[order(datTab$dvals, decreasing = T),]
-    datTab <- datTab %>% select(any_of(c("selected", "link", "xlinkedResPair", 
+    datTab <- datTab %>% select(any_of(c("selected", "link", "xlinkedResPair",
+                                         "xlinkedProtPair", "xlinkedModulPair",
                                 "dvals", "distance", "m.z", "z", "ppm",
                                 "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
                                 "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
                                 "XLink.AA.1", "Protein.1", "Modul.1", "Species.1",
                                 "Acc.2", "XLink.AA.2", "Protein.2", "Modul.2", "Species.2",
                                 "xlinkClass", "Len.Pep.1", "Len.Pep.2",
-                                "Peptide.1", "Peptide.2", "numCSM",
+                                "Peptide.1", "Peptide.2", "numCSM", "numPPSM", "numMPSM",
                                 "Fraction", "RT", "MSMS.Info")))
     if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
                                     Protein.2 = factor(Protein.2))
-        fct_unify(list(datTab$Protein.1, datTab$Protein.2))
     }
     if ("Modul.1" %in% names(datTab) & "Modul.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Modul.1 = factor(Modul.1), 
                                     Modul.2 = factor(Modul.2))
-        fct_unify(list(datTab$Modul.1, datTab$Modul.2))
     }
     if ("Species.1" %in% names(datTab) & "Species.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Species.1 = factor(Species.1), 
                                     Species.2 = factor(Species.2))
-        fct_unify(list(datTab$Species.1, datTab$Species.2))
     }
     if ("Acc.1" %in% names(datTab) & "Acc.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Acc.1 = factor(Acc.1), 
                                     Acc.2 = factor(Acc.2))
-        fct_unify(list(datTab$Acc.1, datTab$Acc.2))
     }
     if ("xlinkClass" %in% names(datTab)) {
         datTab <- datTab %>% mutate(xlinkClass = factor(xlinkClass))
@@ -1143,7 +1035,7 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
          xlab="SVM Score", main="FDR plot")
     plot(decoyHist, add=T, col="salmon")
     plot(doubleDecoyHist, add=T, col="goldenrod1")
-    abline(v=cutoff, lwd=4, lt=2, col="red")
+    abline(v=cutoff, lwd=2, lt=1, col="red")
     legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
            fill = c("lightblue", "salmon", "goldenrod1"),
            bty="n")
@@ -1230,29 +1122,37 @@ calculateGroundTruthFDR <- function(datTab) {
     return(results)
 }
 
-reduceToXlinks <- function(datTab) {
-    datTab <- datTab %>% 
-        group_by(Fraction) %>% 
-        nest() %>% mutate(data=map(data, bestResPairDT)) %>%
-        unnest(cols=c(data))
+bestResPair <- function(datTab, classifier=dvals){
+    quoClass <- enquo(classifier)
+    datTab <- datTab %>% group_by(xlinkedResPair) %>%
+        filter(!! quoClass==max(!! quoClass)) %>%
+        ungroup()
     return(datTab)
 }
 
-reduceToXlinkHacky <- function(datTab, classifier=classifier) {
+bestProtPair <- function(datTab, classifier=dvals){
+    quoClass <- enquo(classifier)
+    datTab <- datTab %>% group_by(xlinkedProtPair) %>%
+        filter(!! quoClass==max(!! quoClass)) %>%
+        ungroup()
+    return(datTab)
+}
+
+bestModPair <- function(datTab, classifier=dvals){
+    quoClass <- enquo(classifier)
+    datTab <- datTab %>% group_by(xlinkedModulPair) %>%
+        filter(!! quoClass==max(!! quoClass)) %>%
+        ungroup()
+    return(datTab)
+}
+
+bestResPairFraction <- function(datTab, classifier=classifier) {
     quoClass <- enquo(classifier)
     datTab <- datTab %>%
         group_by(Fraction) %>%
-        nest() %>% mutate(data=map(data, bestResPairHackDT, !! quoClass)) %>%
+        nest() %>% mutate(data=map(data, bestResPair, !! quoClass)) %>%
         unnest(cols=c(data))
     return(datTab)
-}
-
-bestResPairHackDT <- function(datTab, classifier=dvals){
-    quoClass <- enquo(classifier)
-    datTabR <- datTab %>% group_by(xlinkedResPair) %>%
-        filter(!! quoClass==max(!! quoClass)) %>%
-        ungroup()
-    return(datTabR)
 }
 
 getRandomCrosslinks <- function(pdbFile, numCrosslinks) {
@@ -1274,7 +1174,7 @@ massErrorPlot <- function(massErrors, lowThresh, highThresh, lowPlotRange, highP
          breaks=seq(lowPlotRange, highPlotRange, 0.5),
          xlab = "Mass Error (ppm)",
          main = "Precursor Mass Deviation")
-    abline(v = c(lowThresh, highThresh), lwd = 4, lt = 2, col = "red")
+    abline(v = c(lowThresh, highThresh), lwd = 2, lt = 1, col = "red")
 }
 
 distancePlot <- function(targetDists, randomDists, threshold) {
@@ -1291,7 +1191,7 @@ distancePlot <- function(targetDists, randomDists, threshold) {
          xlab = expression(paste("C", alpha, "-C", alpha, " Distance (Å)")),
          main = "Crosslink Violations")
     plot(dists, col=col2, add=T)
-    abline(v=threshold, lwd=4, lt=2, col="orangered")
+    abline(v=threshold, lwd=2, lt=1, col="red")
     legend("topright", c("experimental", "random distribution"), fill = c(col2, col1),
            bty="n")
 }
@@ -1302,7 +1202,7 @@ numHitsPlot <- function(num.hits, threshold) {
                      names_to="crosslinkClass",
                      values_to="numHits")
     p <- num.hits %>% ggplot(aes(x=fdr, y=numHits)) +
-        geom_line(aes(col=crosslinkClass)) +
+        geom_line(aes(col=crosslinkClass), na.rm=T) +
         theme_bw() +
         theme(legend.position="top") +
         scale_color_brewer(type="qual", palette="Set1") +
@@ -1313,7 +1213,82 @@ numHitsPlot <- function(num.hits, threshold) {
     print(p)
 }
 
+bestResPair <- function(datTab, classifier=dvals){
+    quoClass <- enquo(classifier)
+    datTab <- datTab %>% group_by(xlinkedResPair) %>%
+        filter(!! quoClass==max(!! quoClass)) %>%
+        ungroup()
+    return(datTab)
+}
 
+summarizeProtData <- function(datTab) {
+    datTab <- datTab %>% filter(Decoy=="Target")
+    datTab <- bestResPair(datTab)
+    datTab$Acc.1 <- fct_drop(datTab$Acc.1, only="decoy")
+    datTab$Acc.2 <- fct_drop(datTab$Acc.2, only="decoy")
+    matrixCounts <- datTab %>%
+        group_by(Acc.1, Acc.2) %>%
+        summarize(accCounts = sum(numCSM), .groups = "drop") %>%
+        complete(Acc.1, Acc.2) %>% 
+        unique() %>%
+        pivot_wider(names_from = Acc.2, values_from = accCounts) %>%
+        column_to_rownames("Acc.1") %>%
+        as.matrix()
+    matrixCounts[is.na(matrixCounts)] <- 0
+    matrixCounts <- matrixCounts + t(matrixCounts)
+    diag(matrixCounts) <- diag(matrixCounts) / 2
+    accNames <- rownames(matrixCounts)
+    matrixCounts <- clearAboveDiag(matrixCounts)
+    matrixCounts <- as_tibble(matrixCounts)
+    matrixCounts$Acc.1 <- accNames
+    matrixCounts <- matrixCounts %>%
+        pivot_longer(cols = -Acc.1, names_to = "Acc.2", values_to = "counts")
+    return(matrixCounts)
+}
 
+summarizeModuleData <- function(datTab) {
+    datTab <- datTab %>% filter(Decoy=="Target")
+    datTab <- bestResPair(datTab)
+    # datTab$Acc.1 <- fct_drop(datTab$Acc.1, only="decoy")
+    # datTab$Acc.2 <- fct_drop(datTab$Acc.2, only="decoy")
+    matrixCounts <- datTab %>%
+        group_by(Modul.1, Modul.2) %>%
+        summarize(modCounts = sum(numCSM), .groups = "drop") %>%
+        complete(Modul.1, Modul.2) %>% 
+        unique() %>%
+        pivot_wider(names_from = Modul.2, values_from = modCounts) %>%
+        column_to_rownames("Modul.1") %>%
+        as.matrix()
+    matrixCounts[is.na(matrixCounts)] <- 0
+    matrixCounts <- matrixCounts + t(matrixCounts)
+    diag(matrixCounts) <- diag(matrixCounts) / 2
+    modNames <- rownames(matrixCounts)
+    matrixCounts <- clearAboveDiag(matrixCounts)
+    matrixCounts <- as_tibble(matrixCounts)
+    matrixCounts$Modul.1 <- modNames
+    matrixCounts <- matrixCounts %>%
+        pivot_longer(cols = -Modul.1, names_to = "Modul.2", values_to = "counts")
+    return(matrixCounts)
+}
 
+summaryPlot <- function(summarizedData) {
+    accPlot <- summarizedData %>% 
+        ggplot(aes(Acc.1, Acc.2, size=counts, col=counts)) + 
+        geom_point(na.rm=T) +
+        scale_size(range = c(-1, 12)) +
+        scale_color_viridis_c(option="D") +
+        theme_bw() + 
+        theme(axis.text.x = element_text(angle=90, hjust=1))
+    print(accPlot)
+}
 
+clearAboveDiag <- function(sqMatrix) {
+    n <- dim(sqMatrix)[1]
+    m <- dim(sqMatrix)[2]
+    if (n != m) return("only works for square matrices")
+    a <- 1 + (1:n-1)*n
+    b <- (1:n-1)*(n+1)
+    abovePositions <- unlist(map2(a, b, seq)[2:n])
+    sqMatrix[abovePositions] <- NA
+    return(sqMatrix)
+}
