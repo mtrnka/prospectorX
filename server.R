@@ -259,6 +259,7 @@ function(input, output, session) {
   })
 
   output$IIratio <- renderText({
+    req(tabLevel())
     str_c("percent interProtein: ", classRatio())
   })
   
@@ -277,6 +278,7 @@ function(input, output, session) {
     req(tabLevel())
     if (sum(is.na(tabLevel()$distance)) == nrow(tabLevel())) return(NULL)
     xlTable() %>% 
+      filter(!is.na(distance)) %>%
       pull(distance)
   })
 
