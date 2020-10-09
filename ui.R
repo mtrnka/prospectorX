@@ -66,6 +66,8 @@ fluidPage(
                      tags$hr(),
                      downloadButton("saveClassified", label = "Save results"),
                      br(),
+                     actionButton("viewXiNet", label = "View in xiNet"),
+                     uiOutput("ui_open_tab"),
                      tags$hr(),
                      fluidRow(
                          column(6, 

@@ -525,7 +525,8 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, sp
         fraction <- paste0(fraction, ".mgf")
     }
     instrumentType <- switch(
-        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
+#        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
+        str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
         "ESI-Q-high-res",
         ethcd = "ESI-EThcD-high-res",
         etd = "ESI-ETD-high-res",
@@ -1034,13 +1035,14 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
     diffHist$counts <- targetHist$counts - decoyHist$counts - doubleDecoyHist$counts
     displayLim =c(minValue,maxValue)
     plot(targetHist, col="lightblue", xlim=displayLim, 
-         xlab="SVM Score", main="FDR plot")
+         xlab="SVM Score", main="FDR plot", adj=0)
     plot(decoyHist, add=T, col="salmon")
     plot(doubleDecoyHist, add=T, col="goldenrod1")
     abline(v=cutoff, lwd=2, lt=1, col="red")
     legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
            fill = c("lightblue", "salmon", "goldenrod1"),
            bty="n")
+    #title("FDR plot", adj=0)
 }    
 
 assignGroups <- function(datTab, pgroups=peptideGroups) {
@@ -1175,7 +1177,7 @@ massErrorPlot <- function(massErrors, lowThresh, highThresh, lowPlotRange, highP
          xlim=c(lowPlotRange, highPlotRange), 
          breaks=seq(lowPlotRange, highPlotRange, 1),
          xlab = "Mass Error (ppm)",
-         main = "Precursor Mass Deviation")
+         main = "Precursor Mass Deviation", adj=0)
     abline(v = c(lowThresh, highThresh), lwd = 2, lt = 1, col = "red")
 }
 
@@ -1191,7 +1193,7 @@ distancePlot <- function(targetDists, randomDists, threshold) {
     ylim.value <- ceiling(max(c(dists$counts, r.dists$counts)))
     plot(r.dists, col=col1, ylim=c(0, ylim.value),
          xlab = expression(paste("C", alpha, "-C", alpha, " Distance (Å)")),
-         main = "Crosslink Violations")
+         main = "Crosslink Violations", adj=0)
     plot(dists, col=col2, add=T)
     abline(v=threshold, lwd=2, lt=1, col="red")
     legend("topright", c("experimental", "random distribution"), fill = c(col2, col1),
@@ -1295,4 +1297,10 @@ clearAboveDiag <- function(sqMatrix) {
     abovePositions <- unlist(map2(a, b, seq)[2:n])
     sqMatrix[abovePositions] <- NA
     return(sqMatrix)
+}
+
+makeXiNetFile <- function(datTab) {
+    datTab <- datTab %>% select(dvals, Acc.1, Acc.2, XLink.AA.1, XLink.AA.2)
+    names(datTab) <- c("Score", "Protein1", "Protein2", "LinkPos1", "LinkPos2")
+    return(datTab)
 }
