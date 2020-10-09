@@ -402,4 +402,12 @@ function(input, output, session) {
             plot.title = element_text(face = "bold", size = 14)) +
       ggtitle("Module Pairs")
   })
+
+  output$ui_open_tab <- renderUI({
+    req(input$viewXiNet > 0, xlTable())
+    xiFile <- makeXiNetFile(xlTable())
+    write_csv(xiFile, pathToXiFile)
+    tags$script("window.open('http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo.html', '_blank')")
+  })
+  
 }
