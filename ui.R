@@ -67,7 +67,7 @@ fluidPage(
                      downloadButton("saveClassified", label = "Save results"),
                      br(),
                      actionButton("viewXiNet", label = "View in xiNet"),
-                     uiOutput("ui_open_tab"),
+                     #                     uiOutput("ui_open_tab"),
                      tags$hr(),
                      fluidRow(
                          column(6, 
@@ -89,66 +89,66 @@ fluidPage(
                      )
         ),
         mainPanel(width=9,
-            navbarPage(
-                title="Touchstone", id="navbar",
-                tabPanel("Classification",
-                         h4("Console Output"),
-                         verbatimTextOutput("consoleOut"),
-                         h4("Classification Plots"),
-                         verbatimTextOutput("numberClassedLinks"),
-                         fluidRow(
-                             column(4,
-                                    plotOutput("FDRplot"),
-                                    verbatimTextOutput("FDR")
-                             ),
-                             column(4,
-                                    plotOutput("massErrorPlot"),
-                                    verbatimTextOutput("meanError")
-                             ),
-                            column(4,
-                                   plotOutput("distancePlot"),
-                                   verbatimTextOutput("VR")
-                            )
-                         ),
-                         br(),
-                         fluidRow(
-                             column(4,
-                                    plotOutput("thresholdPlot"),
-                                    verbatimTextOutput("IIratio")
-                             ),
-                             column(4,
-                                    plotOutput("proteinPlot",
-                                               click = "plot_click",
-                                               hover = "prot_hover"
-                                               #                   brush = brushOpts(
-                                               #                      id = "protPlot_brush"
-                                               #                 )
-                                    ),
-                                    verbatimTextOutput("protHover")
-                             ),
-                             column(4,
-                                    plotOutput("modulePlot",
-                                               click = "plot_click",
-                                               hover = "mod_hover"
-                                               # brush = brushOpts(
-                                               #     id = "modPlot_brush"
-                                               # )
-                                    ),
-                                    verbatimTextOutput("modHover"),
-                             )
-                         )
-                ),
-                tabPanel("Crosslink Table",
-                         fluidRow(
-                             DT::dataTableOutput("dataFile")
-                         )
-                ),
-                tabPanel("Selected Crosslinks",
-                         fluidRow(
-                             DT::dataTableOutput("dataFileSelected")
-                         )
-                )
-            )
+                  navbarPage(
+                      title="Touchstone", id="navbar",
+                      tabPanel("Classification",
+                               h4("Console Output"),
+                               verbatimTextOutput("consoleOut"),
+                               h4("Classification Plots"),
+                               verbatimTextOutput("numberClassedLinks"),
+                               fluidRow(
+                                   column(4,
+                                          plotOutput("FDRplot"),
+                                          verbatimTextOutput("FDR")
+                                   ),
+                                   column(4,
+                                          plotOutput("massErrorPlot"),
+                                          verbatimTextOutput("meanError")
+                                   ),
+                                   column(4,
+                                          plotOutput("distancePlot"),
+                                          verbatimTextOutput("VR")
+                                   )
+                               ),
+                               br(),
+                               fluidRow(
+                                   column(4,
+                                          plotOutput("thresholdPlot"),
+                                          verbatimTextOutput("IIratio")
+                                   ),
+                                   column(4,
+                                          plotOutput("proteinPlot",
+                                                     click = "plot_click",
+                                                     hover = "prot_hover"
+                                                     #                   brush = brushOpts(
+                                                     #                      id = "protPlot_brush"
+                                                     #                 )
+                                          ),
+                                          verbatimTextOutput("protHover")
+                                   ),
+                                   column(4,
+                                          plotOutput("modulePlot",
+                                                     click = "plot_click",
+                                                     hover = "mod_hover"
+                                                     # brush = brushOpts(
+                                                     #     id = "modPlot_brush"
+                                                     # )
+                                          ),
+                                          verbatimTextOutput("modHover"),
+                                   )
+                               )
+                      ),
+                      tabPanel("Crosslink Table",
+                               fluidRow(
+                                   DT::dataTableOutput("dataFile")
+                               )
+                      ),
+                      tabPanel("Selected Crosslinks",
+                               fluidRow(
+                                   DT::dataTableOutput("dataFileSelected")
+                               )
+                      )
+                  )
         )
     )
 )
