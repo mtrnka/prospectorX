@@ -65,9 +65,9 @@ fluidPage(
                      ),
                      tags$hr(),
                      downloadButton("saveClassified", label = "Save results"),
-                     br(),
+                     br(),br(),
                      actionButton("viewXiNet", label = "View in xiNet"),
-                     #                     uiOutput("ui_open_tab"),
+                     uiOutput("ui_open_tab"),
                      tags$hr(),
                      fluidRow(
                          column(6, 
@@ -140,11 +140,15 @@ fluidPage(
                       ),
                       tabPanel("Crosslink Table",
                                fluidRow(
+                                   actionButton("viewXiNet", label = "View in xiNet"),
+                                   uiOutput("ui_open_tab"),
                                    DT::dataTableOutput("dataFile")
                                )
                       ),
                       tabPanel("Selected Crosslinks",
                                fluidRow(
+                                   actionButton("viewXiNetSel", label = "View in xiNet"),
+                                   uiOutput("ui_open_tab_sel"),
                                    DT::dataTableOutput("dataFileSelected")
                                )
                       )

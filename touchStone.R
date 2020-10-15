@@ -194,9 +194,13 @@ calculateDecoys <- function(searchTable) {
 }
 
 calculatePairs <- function(searchTable){
-    searchTable$xlinkedProtPair <- ifelse(searchTable$Acc.1 <= searchTable$Acc.2,
+    searchTable$xlinkedProtPair <- ifelse(searchTable$Decoy2 == "Decoy",
+                                          ifelse(searchTable$Protein.1 <= searchTable$Protein.2,
+                                          paste("decoy", searchTable$Protein.1, searchTable$Protein.2, sep="::"),
+                                          paste("decoy", searchTable$Protein.2, searchTable$Protein.1, sep="::")),
+                                          ifelse(searchTable$Acc.1 <= searchTable$Acc.2,
                                           paste(searchTable$Acc.1, searchTable$Acc.2, sep="::"),
-                                          paste(searchTable$Acc.2, searchTable$Acc.1, sep="::"))
+                                          paste(searchTable$Acc.2, searchTable$Acc.1, sep="::")))
     accs <- unique(c(searchTable$Acc.1, searchTable$Acc.2)) %>% str_sort()
     searchTable <- searchTable %>% mutate(Acc.1 = factor(Acc.1, levels = accs),
                                           Acc.2 = factor(Acc.2, levels = accs))
@@ -867,117 +871,117 @@ processMS2xlinkResultsBoosted <- function(ms2searchResults, ms3searchTable, dev=
     return(ms2searchResults)
 }
 
-# 
-# peptideGroups <- list(
-#     Group1=c(
-#         "SDKNR",
-#         "KLINGIR",
-#         "KFDNLTK",
-#         "FIKPILEK",
-#         "APLSASMIKR",
-#         "NPIDFLEAKGYK",
-#         "LPKYSLFELENGR",
-#         "TEVQTGGFSKESILPK"),
-#     Group2=c(
-#         "VKYVTEGMR",
-#         "FDNLTKAER",
-#         "DFQFYKVR",
-#         "YDENDKLIR",
-#         "MIAKSEQEIGK",
-#         "HKPENIVIEMAR",
-#         "TILDFLKSDGFANR",
-#         "KIECFDSVEISGVEDR",
-#         "YVNFLYLASHYEKLK"),
-#     Group3=c(
-#         "LSKSR",
-#         "DKPIR",
-#         "KDLIIK",
-#         "MKNYWR",
-#         "KGILQTVK",
-#         "NSDKLIAR",
-#         "DDSIDNKVLTR"),
-#     Group4=c(
-#         "KLVDSTDK",
-#         "IEKILTFR",
-#         "KAIVDLLFK",
-#         "VLSAYNKHR",
-#         "IEEGIKELGSQILK",
-#         "SSFEKNPIDFLEAK",
-#         "SNFDLAEDAKLQLSK",
-#         "HSLLYEYFTVYNELTKVK"),
-#     Group5=c(
-#         "KVTVK",
-#         "EKIEK",
-#         "VITLKSK",
-#         "QLKEDYFK",
-#         "QLLNAKLITQR",
-#         "GGLSELDKAGFIK",
-#         "MDGTEELLVKLNR"),
-#     Group6=c(
-#         "EVKVITLK",
-#         "KPAFLSGEQK",
-#         "ENQTTQKGQK",
-#         "KTEVQTGGFSK",
-#         "VVDELVKVMGR",
-#         "LESEFVYGDYKVYDVR",
-#         "MLASAGELQKGNELALPSK",
-#         "NFMQLIHDDSLTFKEDIQK",
-#         "VLPKHSLLYEYFTVYNELTK"),
-#     Group7=c(
-#         "KMIAK",
-#         "ESILPKR",
-#         "DLIIKLPK",
-#         "FKVLGNTDR",
-#         "SEQEIGKATAK",
-#         "AIVDLLFKTNR",
-#         "LKTYAHLFDDK",
-#         "VNTEITKAPLSASMIK",
-#         "YDEHHQDLTLLKALVR"),
-#     Group8=c(
-#         "KDWDPK",
-#         "QQLPEKYK",
-#         "KVLSMPQVNIVK",
-#         "MTNFDKNLPNEK",
-#         "QITKHVAQILDSR",
-#         "KSEETITPWNFEEVVDK",
-#         "KNGLFGNLIALSLGLTPNFK",
-#         "SKLVSDFR"),
-#     Group9=c(
-#         "LKSVK",
-#         "IIKDK",
-#         "DWDPKK",
-#         "LKGSPEDNEQK",
-#         "VLSMPQVNIVKK",
-#         "LENLIAQLPGEKK",
-#         "LIYLALAHMIKFR",
-#         "YPKLESEFVYGDYK"),
-#     Group10=c(
-#         "VPSKK",
-#         "VTVKQLK",
-#         "EDYFKK",
-#         "VKYVTEGMR",
-#         "GKSDNVPSEEVVK",
-#         "LEESFLVEEDKK",
-#         "QEDFYPFLKDNR"),
-#     Group11=c(
-#         "GQKNSR",
-#         "AGFIKR",
-#         "GYKEVK",
-#         "VMKQLK",
-#         "KDFQFYK",
-#         "LVDSTDKADLR",
-#         "SDNVPSEEVVKK",
-#         "KNLIGALLFDSGETAEATR"),
-#     Group12=c(
-#         "HSIKK",
-#         "DKQSGK",
-#         "NLPNEKVLPK",
-#         "QSGKTILDFLK",
-#         "MNTKYDENDK",
-#         "SVKELLGITIMER",
-#         "TYAHLFDDKVMK",
-#         "FNASLGTYHDLLKIIK")
-# )
+
+peptideGroups <- list(
+    Group1=c(
+        "SDKNR",
+        "KLINGIR",
+        "KFDNLTK",
+        "FIKPILEK",
+        "APLSASMIKR",
+        "NPIDFLEAKGYK",
+        "LPKYSLFELENGR",
+        "TEVQTGGFSKESILPK"),
+    Group2=c(
+        "VKYVTEGMR",
+        "FDNLTKAER",
+        "DFQFYKVR",
+        "YDENDKLIR",
+        "MIAKSEQEIGK",
+        "HKPENIVIEMAR",
+        "TILDFLKSDGFANR",
+        "KIECFDSVEISGVEDR",
+        "YVNFLYLASHYEKLK"),
+    Group3=c(
+        "LSKSR",
+        "DKPIR",
+        "KDLIIK",
+        "MKNYWR",
+        "KGILQTVK",
+        "NSDKLIAR",
+        "DDSIDNKVLTR"),
+    Group4=c(
+        "KLVDSTDK",
+        "IEKILTFR",
+        "KAIVDLLFK",
+        "VLSAYNKHR",
+        "IEEGIKELGSQILK",
+        "SSFEKNPIDFLEAK",
+        "SNFDLAEDAKLQLSK",
+        "HSLLYEYFTVYNELTKVK"),
+    Group5=c(
+        "KVTVK",
+        "EKIEK",
+        "VITLKSK",
+        "QLKEDYFK",
+        "QLLNAKLITQR",
+        "GGLSELDKAGFIK",
+        "MDGTEELLVKLNR"),
+    Group6=c(
+        "EVKVITLK",
+        "KPAFLSGEQK",
+        "ENQTTQKGQK",
+        "KTEVQTGGFSK",
+        "VVDELVKVMGR",
+        "LESEFVYGDYKVYDVR",
+        "MLASAGELQKGNELALPSK",
+        "NFMQLIHDDSLTFKEDIQK",
+        "VLPKHSLLYEYFTVYNELTK"),
+    Group7=c(
+        "KMIAK",
+        "ESILPKR",
+        "DLIIKLPK",
+        "FKVLGNTDR",
+        "SEQEIGKATAK",
+        "AIVDLLFKTNR",
+        "LKTYAHLFDDK",
+        "VNTEITKAPLSASMIK",
+        "YDEHHQDLTLLKALVR"),
+    Group8=c(
+        "KDWDPK",
+        "QQLPEKYK",
+        "KVLSMPQVNIVK",
+        "MTNFDKNLPNEK",
+        "QITKHVAQILDSR",
+        "KSEETITPWNFEEVVDK",
+        "KNGLFGNLIALSLGLTPNFK",
+        "SKLVSDFR"),
+    Group9=c(
+        "LKSVK",
+        "IIKDK",
+        "DWDPKK",
+        "LKGSPEDNEQK",
+        "VLSMPQVNIVKK",
+        "LENLIAQLPGEKK",
+        "LIYLALAHMIKFR",
+        "YPKLESEFVYGDYK"),
+    Group10=c(
+        "VPSKK",
+        "VTVKQLK",
+        "EDYFKK",
+        "VKYVTEGMR",
+        "GKSDNVPSEEVVK",
+        "LEESFLVEEDKK",
+        "QEDFYPFLKDNR"),
+    Group11=c(
+        "GQKNSR",
+        "AGFIKR",
+        "GYKEVK",
+        "VMKQLK",
+        "KDFQFYK",
+        "LVDSTDKADLR",
+        "SDNVPSEEVVKK",
+        "KNLIGALLFDSGETAEATR"),
+    Group12=c(
+        "HSIKK",
+        "DKQSGK",
+        "NLPNEKVLPK",
+        "QSGKTILDFLK",
+        "MNTKYDENDK",
+        "SVKELLGITIMER",
+        "TYAHLFDDKVMK",
+        "FNASLGTYHDLLKIIK")
+)
 
 # Max number of crosslinks:
 #peptideGroups %>% map_dbl(function(x) length(x)**2) %>% sum
@@ -1035,14 +1039,14 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
     diffHist$counts <- targetHist$counts - decoyHist$counts - doubleDecoyHist$counts
     displayLim =c(minValue,maxValue)
     plot(targetHist, col="lightblue", xlim=displayLim, 
-         xlab="SVM Score", main="FDR plot", adj=0)
+         xlab="SVM Score", main=NA)
     plot(decoyHist, add=T, col="salmon")
     plot(doubleDecoyHist, add=T, col="goldenrod1")
     abline(v=cutoff, lwd=2, lt=1, col="red")
     legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
            fill = c("lightblue", "salmon", "goldenrod1"),
            bty="n")
-    #title("FDR plot", adj=0)
+    title("FDR plot", adj=0)
 }    
 
 assignGroups <- function(datTab, pgroups=peptideGroups) {
@@ -1173,11 +1177,17 @@ getRandomCrosslinks <- function(pdbFile, numCrosslinks) {
 }
 
 massErrorPlot <- function(massErrors, lowThresh, highThresh, lowPlotRange, highPlotRange) {
+    if (abs(lowPlotRange) < 10 & abs(highPlotRange) < 10) {
+        binw <- 0.5
+    } else {
+        binw <- 1
+    }
     hist(massErrors, col="slategray3", 
          xlim=c(lowPlotRange, highPlotRange), 
-         breaks=seq(lowPlotRange, highPlotRange, 1),
+         breaks=seq(lowPlotRange, highPlotRange, binw),
          xlab = "Mass Error (ppm)",
-         main = "Precursor Mass Deviation", adj=0)
+         main = NA)
+    title("Precursor Mass Deviation", adj=0)
     abline(v = c(lowThresh, highThresh), lwd = 2, lt = 1, col = "red")
 }
 
@@ -1193,7 +1203,8 @@ distancePlot <- function(targetDists, randomDists, threshold) {
     ylim.value <- ceiling(max(c(dists$counts, r.dists$counts)))
     plot(r.dists, col=col1, ylim=c(0, ylim.value),
          xlab = expression(paste("C", alpha, "-C", alpha, " Distance (Å)")),
-         main = "Crosslink Violations", adj=0)
+         main = NA)
+    title("Crosslink Violations", adj=0)
     plot(dists, col=col2, add=T)
     abline(v=threshold, lwd=2, lt=1, col="red")
     legend("topright", c("experimental", "random distribution"), fill = c(col2, col1),

@@ -260,7 +260,7 @@ function(input, output, session) {
 
   output$IIratio <- renderText({
     req(tabLevel())
-    str_c("percent interProtein: ", classRatio())
+    str_c("percent interProtein: ", round(100*classRatio(),1), "%")
   })
   
   output$thresholdPlot <- renderPlot({
@@ -404,9 +404,31 @@ function(input, output, session) {
   })
 
   observeEvent(input$viewXiNet, {
-    xiFile <- makeXiNetFile(xlTableSelected())
-    write_csv(xiFile, pathToXiFile)
-    browseURL('http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo.html')
+    req(xlTable())
+    xiFile <- makeXiNetFile(xlTable())
+    qs <- as.character(Sys.time()) %>% str_replace_all("[[\\s\\-\\:]]","")
+    xiFileName <- str_c("xiFile", qs)
+    xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
+    write_csv(xiFile, xiFilePath)
+    output$ui_open_tab <- renderUI({
+      baseLink <- 'http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo2.html'
+      link <- str_c(baseLink, xiFileName, sep="?fileName=")
+      tags$script(paste0("window.open('", link, "', '_blank')"))
+    })
   })
-
+  
+  observeEvent(input$viewXiNetSel, {
+    req(xlTableSelected())
+    xiFile <- makeXiNetFile(xlTableSelected())
+    qs <- as.character(Sys.time()) %>% str_replace_all("[[\\s\\-\\:]]","")
+    xiFileName <- str_c("xiFile", qs)
+    xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
+    write_csv(xiFile, xiFilePath)
+    output$ui_open_tab <- renderUI({
+      baseLink <- 'http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo2.html'
+      link <- str_c(baseLink, xiFileName, sep="?fileName=")
+      tags$script(paste0("window.open('", link, "', '_blank')"))
+    })
+  })
+  
 }
