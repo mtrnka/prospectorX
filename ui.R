@@ -140,8 +140,8 @@ fluidPage(
                       ),
                       tabPanel("Crosslink Table",
                                fluidRow(
-                                   actionButton("viewXiNet", label = "View in xiNet"),
-                                   uiOutput("ui_open_tab"),
+                                   actionButton("viewXiNetTwo", label = "View in xiNet"),
+                                   uiOutput("ui_open_tab_two"),
                                    DT::dataTableOutput("dataFile")
                                )
                       ),

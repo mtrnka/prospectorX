@@ -416,6 +416,20 @@ function(input, output, session) {
       tags$script(paste0("window.open('", link, "', '_blank')"))
     })
   })
+
+  observeEvent(input$viewXiNetSelTwo, {
+    req(xlTable())
+    xiFile <- makeXiNetFile(xlTable())
+    qs <- as.character(Sys.time()) %>% str_replace_all("[[\\s\\-\\:]]","")
+    xiFileName <- str_c("xiFile", qs)
+    xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
+    write_csv(xiFile, xiFilePath)
+    output$ui_open_tab_sel_two <- renderUI({
+      baseLink <- 'http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo2.html'
+      link <- str_c(baseLink, xiFileName, sep="?fileName=")
+      tags$script(paste0("window.open('", link, "', '_blank')"))
+    })
+  })
   
   observeEvent(input$viewXiNetSel, {
     req(xlTableSelected())
@@ -424,7 +438,7 @@ function(input, output, session) {
     xiFileName <- str_c("xiFile", qs)
     xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
     write_csv(xiFile, xiFilePath)
-    output$ui_open_tab <- renderUI({
+    output$ui_open_tab_sel <- renderUI({
       baseLink <- 'http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo2.html'
       link <- str_c(baseLink, xiFileName, sep="?fileName=")
       tags$script(paste0("window.open('", link, "', '_blank')"))
