@@ -417,7 +417,7 @@ function(input, output, session) {
     })
   })
 
-  observeEvent(input$viewXiNetSelTwo, {
+  observeEvent(input$viewXiNetTwo, {
     req(xlTable())
     xiFile <- makeXiNetFile(xlTable())
     qs <- as.character(Sys.time()) %>% str_replace_all("[[\\s\\-\\:]]","")

@@ -55,22 +55,24 @@ fluidPage(
                                                 "Protein Pairs",
                                                 "Module Pairs")
                      ),
-                     column(4, style='padding:0px; margin:0px',
-                            br(), br(),
-                            actionButton("findThreshold", "Classify")
-                     ),
-                     column(8,
-                            sliderInput("targetFDR", "Target FDR", min = 0, max = 25,
-                                        step = 0.5, value = 1.0)
-                     ),
-                     tags$hr(),
-                     downloadButton("saveClassified", label = "Save results"),
-                     br(),br(),
-                     actionButton("viewXiNet", label = "View in xiNet"),
-                     uiOutput("ui_open_tab"),
                      tags$hr(),
                      fluidRow(
-                         column(6, 
+                         column(6,
+                                sliderInput("targetFDR", "Target FDR", min = 0, max = 25,
+                                            step = 0.5, value = 1.0),
+                                actionButton("findThreshold", "Classify")
+                         ),
+                         column(6,
+                                br(),br(),
+                                downloadButton("saveClassified", label = "Save results"),
+                                br(),br(),
+                                actionButton("viewXiNet", label = "View in xiNet"),
+                                uiOutput("ui_open_tab"),
+                         )
+                     ),
+                     tags$hr(),
+                     fluidRow(
+                         column(6,
                                 sliderInput("svmThreshold", "Min. SVM Score", min = -5, max = 10, 
                                             step = 0.1, value = 0),
                                 br(),
@@ -86,7 +88,8 @@ fluidPage(
                                 br(),
                                 uiOutput("distanceSlider")
                          )
-                     )
+                     ),
+                     tags$hr()
         ),
         mainPanel(width=9,
                   navbarPage(
@@ -142,6 +145,7 @@ fluidPage(
                                fluidRow(
                                    actionButton("viewXiNetTwo", label = "View in xiNet"),
                                    uiOutput("ui_open_tab_two"),
+                                   br(),br(),
                                    DT::dataTableOutput("dataFile")
                                )
                       ),
@@ -149,6 +153,7 @@ fluidPage(
                                fluidRow(
                                    actionButton("viewXiNetSel", label = "View in xiNet"),
                                    uiOutput("ui_open_tab_sel"),
+                                   br(),br(),
                                    DT::dataTableOutput("dataFileSelected")
                                )
                       )

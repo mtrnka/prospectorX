@@ -524,6 +524,40 @@ buildClassifier <- function(datTab) {
     return(datTab)
 }
 
+buildClassifierMS3 <- function(datTab) {
+    datTab$massError <- abs(datTab$ppm)
+    if (nrow(datTab) > 30000) {
+        sampleNo <- 15000
+    } else {
+        sampleNo <- nrow(datTab)/2
+    }
+    ind <- sample(nrow(datTab),sampleNo)
+    train <- datTab[ind,]
+    test <- datTab[-1 * ind,]
+    params <- c("Sc.2","z","Sc.1","numCSM","massError")
+    wghts <- numeric(0)
+    wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
+    wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
+    fit <- svm(train$Decoy2 ~., 
+               subset(train, select=params),
+               kernel="linear",
+               cost=0.01,
+               tolerance=0.01,
+               class.weights=wghts
+    )
+    p <- predict(fit, subset(datTab,select=params),decision.values=T)
+    datTab$dvals <- as.numeric(attr(p,"decision.values"))
+    print(paste("training weights:", round(wghts,2)))
+    tab <- table(datTab$Decoy2, datTab$dvals > 0)
+    # if (tab[1] < tab[3]) {
+    #     datTab$dvals <- -1 * datTab$dvals
+    #     tab <- table(datTab$Decoy2, datTab$dvals > 0)
+    # }
+    print(tab)
+    print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
+    return(datTab)
+}
+
 generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, spectrum) {
     if(!str_detect(fraction, "\\.[[a-z]]$")) {
         fraction <- paste0(fraction, ".mgf")
@@ -632,8 +666,6 @@ formatXLTable <- function(datTab) {
 }
 
 XVisOutput <- function(datTab) {
-#    Protein1 <- str_c("sp", pull(datTab, Acc.1), pull(datTab, Species.1), sep = "|")
-#    Protein2 <- str_c("sp", pull(datTab, Acc.2), pull(datTab, Species.2), sep = "|")
     Protein1 <- pull(datTab, Protein.1)
     Protein2 <- pull(datTab, Protein.2)
     AbsPos1 <- pull(datTab, XLink.AA.1)
@@ -670,20 +702,16 @@ getIndicesForFile <- function(file) {
     return(extract)
 }
 
-createMasterScanFile <- function(peaklistDir, 
-                                 ms3PAVApeaklist, 
+createMasterScanFile <- function(ms3PAVApeaklist, 
                                  ms2PAVApeaklistCID,
                                  ms2PAVApeaklistETD=NA) {
 
-    ms3masterscansCID <- getIndicesForFile(file.path(peaklistDir,
-                                                     ms3PAVApeaklist))
+    ms3masterscansCID <- getIndicesForFile(ms3PAVApeaklist)
     names(ms3masterscansCID) <- c("ms3ScanNo", "ms2cidScanNo", 
                                   "pepmass.ms3", "charge.ms3")
-    ms2masterscansCID <- getIndicesForFile(file.path(peaklistDir,
-                                                     ms2PAVApeaklistCID))
+    ms2masterscansCID <- getIndicesForFile(ms2PAVApeaklistCID)
     if (!is.na(ms2PAVApeaklistETD)) {
-        ms2masterscansETD <- getIndicesForFile(file.path(peaklistDir,
-                                                         ms2PAVApeaklistETD))
+        ms2masterscansETD <- getIndicesForFile(ms2PAVApeaklistETD)
         ms2masterscans <- full_join(ms2masterscansCID, ms2masterscansETD,
                                     by=c("masterScanNo", "pepmass","charge"))
         names(ms2masterscans) <- c("ms2cidScanNo", "ms1MasterScanNo",
@@ -706,7 +734,7 @@ createMasterScanFile <- function(peaklistDir,
     return(ms2masterscans)
 }
 
-readMS3results <- function(searchResultsDir, ms3SearchTable, masterScanFile) {
+readMS3results <- function(ms3SearchTable){
     ms3results <- read_tsv(ms3SearchTable, skip=2) %>% 
         select(c("DB Peptide", "Peptide", "Protein Mods",
                "Fraction", "RT", "Spectrum", "MSMS Info", "Score",
@@ -714,52 +742,33 @@ readMS3results <- function(searchResultsDir, ms3SearchTable, masterScanFile) {
     names(ms3results) <- c("DB.Peptide.ms3", "Peptide.ms3", "Protein.Mods.ms3",
                            "Fraction.ms3", "RT.ms3", "Spectrum.ms3", "ms3ScanNo", 
                            "Score.ms3", "Expect.ms3", "Protein.ms3", "Acc.ms3",
-                           "Decoy.ms3")
-    ms3results$Decoy.ms3[ms3results$Decoy.ms3 != "DECOY"] <- "Target"
-    ms3results <- left_join(ms3results, masterScanFile, 
-                            by = "ms3ScanNo")
-    ms3results$precMass.ms3 <- map2_dbl(ms3results$pepmass.ms3,
-                                        ms3results$charge.ms3, calculatePrecMass)
+                           "Species.ms3")
+    ms3results$Decoy.ms3 <- ifelse(str_detect(ms3results$Acc.ms3, "decoy"),
+                                   "DECOY", "Target")
+    ms3results <- ms3results %>% 
+        filter(str_detect(Protein.Mods.ms3, "Xlink:DSSO_[[as]]_fragment"))
     return(ms3results)
 }
 
-processMS3xlinkResults <- function(ms3SearchTable,
-                                   projectDir,
-                                   pdbDir,
-                                   chainMapFile,
-                                   pdbFile,
-                                   modFile,
-                                   preProcessFunction=function(x) x) {
-    
-    ms3results <- ms3SearchTable
+addMasterScanInfo <- function(ms3results, masterScanFile) {
+   ms3results <- left_join(ms3results, masterScanFile,
+                           by = "ms3ScanNo")
+   ms3results$precMass.ms3 <- map2_dbl(ms3results$pepmass.ms3,
+                                       ms3results$charge.ms3, calculatePrecMass)
+   return(ms3results)
+}
+
+processMS3xlinkResults <- function(ms3results) {
     n_ms3 <- ms3results %>% group_by(ms2cidScanNo) %>% nest()
     n_ms3 <- n_ms3 %>% mutate(scanGroupSize = map_int(data, ~nrow(.)))
-    
     ms3crosslinksFlat <- map2_dfr(n_ms3$data, n_ms3$ms2cidScanNo, ms3ionFragFind)
-    ms3crosslinksFlat <- preProcessFunction(ms3crosslinksFlat)
     ms3crosslinksFlat$Score.Diff <- ms3crosslinksFlat$Sc.2
-    ms3crosslinksFlat <- calculatePairs(ms3crosslinksFlat)
     ms3crosslinksFlat <- assignXLinkClass(ms3crosslinksFlat)
-    #ms3crosslinksFlat <- calculatePercentMatched(ms3crosslinksFlat)
-    #ms3crosslinksFlat <- calculatePeptideLengths(ms3crosslinksFlat)
     ms3crosslinksFlat <- lengthFilter(ms3crosslinksFlat, minLen = 4, maxLen = 25)
     ms3crosslinksFlat <- scoreFilter(ms3crosslinksFlat, minScore = 0)
-    
-    # Modify this class or make new class to read in the MS3 results and all 
-    # necessary peaklists and flatten.
-    t1 <- new(Class="PPsearchCompareXL",
-              directory=projectDir,
-              dataFile="emptyTemplate.txt",
-              modFile=modFile,
-              pdbDir=pdbDir, 
-              pdbFile=pdbFile, 
-              chainMapFile=chainMapFile
-    )
-    t1@dataTable <- ms3crosslinksFlat
-    t1@dataTable <- nces(t1@dataTable, t1@caTracedPDB, t1@chainMap)
-    t1@dataTable <- populateModules(t1@dataTable, t1@modulFile)
-    t1@dataTable <- calculateDecoys(t1@dataTable)
-    return(t1)
+    ms3crosslinksFlat <- calculateDecoys(ms3crosslinksFlat)
+    ms3crosslinksFlat <- calculatePairs(ms3crosslinksFlat)
+    return(ms3crosslinksFlat)
 }
 
 getMassError <- function(targetMass, testMass) {
@@ -769,6 +778,8 @@ getMassError <- function(targetMass, testMass) {
 }
 
 ms3ionFragFind <- function(scanGroupTibble, masterScanNo) {
+    scanGroupTibble <- scanGroupTibble %>% 
+        filter(!is.na(str_match(Protein.Mods.ms3, "Xlink:DSSO_[[as]]_fragment@([[0-9]]+)")[,2]))
     ms2Mass <- scanGroupTibble$precMass.ms2[1]
     scanGroupSize <- nrow(scanGroupTibble)
     if (scanGroupSize < 2) {
@@ -833,6 +844,7 @@ flattenMS3pair <- function(ms3CSM1, ms3CSM2, masterScanNo=NA) {
                       # This needs to change to support decoys soon.
                       Decoy.1=ms3CSM1$Decoy.ms3,
                       Decoy.2=ms3CSM2$Decoy.ms3,
+                      z=ms3CSM1$charge.ms2,
                       # Parsing of the Xlinked residues is still simplistic
                       # and does not account for site localization ambiguity
                       XLink.AA.1=str_match(ms3CSM1$`Protein.Mods.ms3`, 
@@ -843,145 +855,194 @@ flattenMS3pair <- function(ms3CSM1, ms3CSM2, masterScanNo=NA) {
     return(flatCSM)
 }
 
-processMS2xlinkResultsBoosted <- function(ms2searchResults, ms3searchTable, dev=F) {
-    #ms2search results are the S04 object and they should not be processed beyond CSMs ideally.
-    #ms3searchTable is the tsv d by running readMS3results
-    
-    datTab <- ms2searchResults@dataTable
-    ms2rescue <- left_join(datTab, ms3searchTable, by=c("MSMS.Info"="ms2etdScanNo"))
-    ms2rescue$outcome <- NA
-    ms2rescue$outcome[ms2rescue$DB.Peptide.1 == ms2rescue$`DB.Peptide.ms3`] <- "agree Pep1"
-    ms2rescue$outcome[ms2rescue$DB.Peptide.2 == ms2rescue$`DB.Peptide.ms3`] <- "agree Pep2"
-    ms2rescue$outcome[!is.na(ms2rescue$`DB.Peptide.ms3`) &
-                          ms2rescue$`DB.Peptide.ms3`!= ms2rescue$DB.Peptide.1 &
-                          ms2rescue$`DB.Peptide.ms3`!= ms2rescue$DB.Peptide.2] <- "disagree"
-    print(table(ms2rescue$outcome))
-    if (dev) {return(ms2rescue)}
-    datTab <- left_join(datTab,
-                        ms2rescue[which(ms2rescue$outcome=="agree Pep2"),
-                                  c("MSMS.Info","DB.Peptide.ms3", "Peptide.ms3", 
-                                    "Protein.Mods.ms3", "Fraction.ms3", "RT.ms3", 
-                                    "Spectrum.ms3", "ms3ScanNo", "Score.ms3", "Expect.ms3", 
-                                    "ms2cidScanNo", "pepmass.ms3", "charge.ms3", 
-                                    "precMass.ms3")],
-                        by="MSMS.Info")
-    datTab[is.na(datTab$ms3ScanNo), "Expect.ms3"] <- 1
-    datTab <- datTab %>% mutate(Score.Diff.Boosted = Score.Diff + -log(Expect.ms3))
-    ms2searchResults@dataTable <- datTab
-    return(ms2searchResults)
+processMS3xlinkResultsSingleFile <- function(scResult, ms3file, ms2file) {
+    masterScanList <- createMasterScanFile(ms3file, ms2file)
+    ms3 <- addMasterScanInfo(scResult, masterScanList)
+    datTab <- processMS3xlinkResults(ms3)
+    return(datTab)
 }
 
+processMS3xlinkResultsMultiFile <- function(scResults, ms3files, ms2files) {
+    #scResults is search compare output for MS3 search of all files
+    #ms3files and ms2files are character vectors with PAVA generated file names
+    searchCompareMS3 <- readMS3results(scResults)
+    searchCompareMS3 <- searchCompareMS3 %>% group_by(Fraction.ms3) %>% nest()
+    baseFiles <- str_replace(searchCompareMS3$Fraction.ms3, "_[[A-Z]]+MSms[[0-9]][[a-z]]+", "")
+    numMS3Files <- length(ms3files)
+    numMS2Files <- length(ms2files)
+    if ((numMS3Files != numMS2Files) | (numMS3Files != nrow(searchCompareMS3))) {
+        print("incorrect input")
+        return()
+    }
+    datTab <- map_dfr(baseFiles, function(bf) {
+        p1 <- searchCompareMS3 %>% filter(str_detect(Fraction.ms3, bf)) %>% unnest(cols=c(data))
+        p2 <- ms3files[str_which(ms3files, bf)]
+        p3 <- ms2files[str_which(ms2files, bf)]
+        processMS3xlinkResultsSingleFile(p1, p2, p3)
+    })
+    return(datTab)
+}
 
-peptideGroups <- list(
-    Group1=c(
-        "SDKNR",
-        "KLINGIR",
-        "KFDNLTK",
-        "FIKPILEK",
-        "APLSASMIKR",
-        "NPIDFLEAKGYK",
-        "LPKYSLFELENGR",
-        "TEVQTGGFSKESILPK"),
-    Group2=c(
-        "VKYVTEGMR",
-        "FDNLTKAER",
-        "DFQFYKVR",
-        "YDENDKLIR",
-        "MIAKSEQEIGK",
-        "HKPENIVIEMAR",
-        "TILDFLKSDGFANR",
-        "KIECFDSVEISGVEDR",
-        "YVNFLYLASHYEKLK"),
-    Group3=c(
-        "LSKSR",
-        "DKPIR",
-        "KDLIIK",
-        "MKNYWR",
-        "KGILQTVK",
-        "NSDKLIAR",
-        "DDSIDNKVLTR"),
-    Group4=c(
-        "KLVDSTDK",
-        "IEKILTFR",
-        "KAIVDLLFK",
-        "VLSAYNKHR",
-        "IEEGIKELGSQILK",
-        "SSFEKNPIDFLEAK",
-        "SNFDLAEDAKLQLSK",
-        "HSLLYEYFTVYNELTKVK"),
-    Group5=c(
-        "KVTVK",
-        "EKIEK",
-        "VITLKSK",
-        "QLKEDYFK",
-        "QLLNAKLITQR",
-        "GGLSELDKAGFIK",
-        "MDGTEELLVKLNR"),
-    Group6=c(
-        "EVKVITLK",
-        "KPAFLSGEQK",
-        "ENQTTQKGQK",
-        "KTEVQTGGFSK",
-        "VVDELVKVMGR",
-        "LESEFVYGDYKVYDVR",
-        "MLASAGELQKGNELALPSK",
-        "NFMQLIHDDSLTFKEDIQK",
-        "VLPKHSLLYEYFTVYNELTK"),
-    Group7=c(
-        "KMIAK",
-        "ESILPKR",
-        "DLIIKLPK",
-        "FKVLGNTDR",
-        "SEQEIGKATAK",
-        "AIVDLLFKTNR",
-        "LKTYAHLFDDK",
-        "VNTEITKAPLSASMIK",
-        "YDEHHQDLTLLKALVR"),
-    Group8=c(
-        "KDWDPK",
-        "QQLPEKYK",
-        "KVLSMPQVNIVK",
-        "MTNFDKNLPNEK",
-        "QITKHVAQILDSR",
-        "KSEETITPWNFEEVVDK",
-        "KNGLFGNLIALSLGLTPNFK",
-        "SKLVSDFR"),
-    Group9=c(
-        "LKSVK",
-        "IIKDK",
-        "DWDPKK",
-        "LKGSPEDNEQK",
-        "VLSMPQVNIVKK",
-        "LENLIAQLPGEKK",
-        "LIYLALAHMIKFR",
-        "YPKLESEFVYGDYK"),
-    Group10=c(
-        "VPSKK",
-        "VTVKQLK",
-        "EDYFKK",
-        "VKYVTEGMR",
-        "GKSDNVPSEEVVK",
-        "LEESFLVEEDKK",
-        "QEDFYPFLKDNR"),
-    Group11=c(
-        "GQKNSR",
-        "AGFIKR",
-        "GYKEVK",
-        "VMKQLK",
-        "KDFQFYK",
-        "LVDSTDKADLR",
-        "SDNVPSEEVVKK",
-        "KNLIGALLFDSGETAEATR"),
-    Group12=c(
-        "HSIKK",
-        "DKQSGK",
-        "NLPNEKVLPK",
-        "QSGKTILDFLK",
-        "MNTKYDENDK",
-        "SVKELLGITIMER",
-        "TYAHLFDDKVMK",
-        "FNASLGTYHDLLKIIK")
-)
+# scResults2 <- "DemoFiles/dssoMS3/ms3dataLarge.txt"
+# ms3files2 <- c("DemoFiles/dssoMS3/Z20200519-31_ITMSms3cid.txt",
+#               "DemoFiles/dssoMS3/Z20200519-39_ITMSms3cid.txt",
+#               "DemoFiles/dssoMS3/Z20200519-49_ITMSms3cid.txt",
+#               "DemoFiles/dssoMS3/Z20200519-59_ITMSms3cid.txt")
+# 
+# ms2files2 <- c("DemoFiles/dssoMS3/Z20200519-31_FTMSms2cid.txt",
+#               "DemoFiles/dssoMS3/Z20200519-39_FTMSms2cid.txt",
+#               "DemoFiles/dssoMS3/Z20200519-49_FTMSms2cid.txt",
+#               "DemoFiles/dssoMS3/Z20200519-59_FTMSms2cid.txt")
+# demo <- processMS3xlinkResultsMultiFile(scResults2, ms3files2, ms2files2)
+# 
+# searchCompareMS3 <- readMS3results(scResults2)
+# searchCompareMS3 <- searchCompareMS3 %>% group_by(Fraction.ms3) %>% nest()
+# baseFiles <- str_replace(searchCompareMS3$Fraction.ms3, "_[[A-Z]]+MSms[[0-9]][[a-z]]+", "")
+# p1 <- searchCompareMS3 %>% filter(str_detect(Fraction.ms3, baseFiles[2])) %>% unnest(cols=c(data))
+# p2 <- ms3files2[str_which(ms3files2, baseFiles[2])]
+# p3 <- ms2files2[str_which(ms2files2, baseFiles[2])]
+
+# processMS3xlinkResultsSingleFile(p1, p2, p3)
+
+# processMS2xlinkResultsBoosted <- function(ms2searchResults, ms3searchTable, dev=F) {
+#     #ms2search results are the S04 object and they should not be processed beyond CSMs ideally.
+#     #ms3searchTable is the tsv d by running readMS3results
+#     
+#     datTab <- ms2searchResults@dataTable
+#     ms2rescue <- left_join(datTab, ms3searchTable, by=c("MSMS.Info"="ms2etdScanNo"))
+#     ms2rescue$outcome <- NA
+#     ms2rescue$outcome[ms2rescue$DB.Peptide.1 == ms2rescue$`DB.Peptide.ms3`] <- "agree Pep1"
+#     ms2rescue$outcome[ms2rescue$DB.Peptide.2 == ms2rescue$`DB.Peptide.ms3`] <- "agree Pep2"
+#     ms2rescue$outcome[!is.na(ms2rescue$`DB.Peptide.ms3`) &
+#                           ms2rescue$`DB.Peptide.ms3`!= ms2rescue$DB.Peptide.1 &
+#                           ms2rescue$`DB.Peptide.ms3`!= ms2rescue$DB.Peptide.2] <- "disagree"
+#     print(table(ms2rescue$outcome))
+#     if (dev) {return(ms2rescue)}
+#     datTab <- left_join(datTab,
+#                         ms2rescue[which(ms2rescue$outcome=="agree Pep2"),
+#                                   c("MSMS.Info","DB.Peptide.ms3", "Peptide.ms3", 
+#                                     "Protein.Mods.ms3", "Fraction.ms3", "RT.ms3", 
+#                                     "Spectrum.ms3", "ms3ScanNo", "Score.ms3", "Expect.ms3", 
+#                                     "ms2cidScanNo", "pepmass.ms3", "charge.ms3", 
+#                                     "precMass.ms3")],
+#                         by="MSMS.Info")
+#     datTab[is.na(datTab$ms3ScanNo), "Expect.ms3"] <- 1
+#     datTab <- datTab %>% mutate(Score.Diff.Boosted = Score.Diff + -log(Expect.ms3))
+#     ms2searchResults@dataTable <- datTab
+#     return(ms2searchResults)
+# }
+# 
+
+# peptideGroups <- list(
+#     Group1=c(
+#         "SDKNR",
+#         "KLINGIR",
+#         "KFDNLTK",
+#         "FIKPILEK",
+#         "APLSASMIKR",
+#         "NPIDFLEAKGYK",
+#         "LPKYSLFELENGR",
+#         "TEVQTGGFSKESILPK"),
+#     Group2=c(
+#         "VKYVTEGMR",
+#         "FDNLTKAER",
+#         "DFQFYKVR",
+#         "YDENDKLIR",
+#         "MIAKSEQEIGK",
+#         "HKPENIVIEMAR",
+#         "TILDFLKSDGFANR",
+#         "KIECFDSVEISGVEDR",
+#         "YVNFLYLASHYEKLK"),
+#     Group3=c(
+#         "LSKSR",
+#         "DKPIR",
+#         "KDLIIK",
+#         "MKNYWR",
+#         "KGILQTVK",
+#         "NSDKLIAR",
+#         "DDSIDNKVLTR"),
+#     Group4=c(
+#         "KLVDSTDK",
+#         "IEKILTFR",
+#         "KAIVDLLFK",
+#         "VLSAYNKHR",
+#         "IEEGIKELGSQILK",
+#         "SSFEKNPIDFLEAK",
+#         "SNFDLAEDAKLQLSK",
+#         "HSLLYEYFTVYNELTKVK"),
+#     Group5=c(
+#         "KVTVK",
+#         "EKIEK",
+#         "VITLKSK",
+#         "QLKEDYFK",
+#         "QLLNAKLITQR",
+#         "GGLSELDKAGFIK",
+#         "MDGTEELLVKLNR"),
+#     Group6=c(
+#         "EVKVITLK",
+#         "KPAFLSGEQK",
+#         "ENQTTQKGQK",
+#         "KTEVQTGGFSK",
+#         "VVDELVKVMGR",
+#         "LESEFVYGDYKVYDVR",
+#         "MLASAGELQKGNELALPSK",
+#         "NFMQLIHDDSLTFKEDIQK",
+#         "VLPKHSLLYEYFTVYNELTK"),
+#     Group7=c(
+#         "KMIAK",
+#         "ESILPKR",
+#         "DLIIKLPK",
+#         "FKVLGNTDR",
+#         "SEQEIGKATAK",
+#         "AIVDLLFKTNR",
+#         "LKTYAHLFDDK",
+#         "VNTEITKAPLSASMIK",
+#         "YDEHHQDLTLLKALVR"),
+#     Group8=c(
+#         "KDWDPK",
+#         "QQLPEKYK",
+#         "KVLSMPQVNIVK",
+#         "MTNFDKNLPNEK",
+#         "QITKHVAQILDSR",
+#         "KSEETITPWNFEEVVDK",
+#         "KNGLFGNLIALSLGLTPNFK",
+#         "SKLVSDFR"),
+#     Group9=c(
+#         "LKSVK",
+#         "IIKDK",
+#         "DWDPKK",
+#         "LKGSPEDNEQK",
+#         "VLSMPQVNIVKK",
+#         "LENLIAQLPGEKK",
+#         "LIYLALAHMIKFR",
+#         "YPKLESEFVYGDYK"),
+#     Group10=c(
+#         "VPSKK",
+#         "VTVKQLK",
+#         "EDYFKK",
+#         "VKYVTEGMR",
+#         "GKSDNVPSEEVVK",
+#         "LEESFLVEEDKK",
+#         "QEDFYPFLKDNR"),
+#     Group11=c(
+#         "GQKNSR",
+#         "AGFIKR",
+#         "GYKEVK",
+#         "VMKQLK",
+#         "KDFQFYK",
+#         "LVDSTDKADLR",
+#         "SDNVPSEEVVKK",
+#         "KNLIGALLFDSGETAEATR"),
+#     Group12=c(
+#         "HSIKK",
+#         "DKQSGK",
+#         "NLPNEKVLPK",
+#         "QSGKTILDFLK",
+#         "MNTKYDENDK",
+#         "SVKELLGITIMER",
+#         "TYAHLFDDKVMK",
+#         "FNASLGTYHDLLKIIK")
+# )
 
 # Max number of crosslinks:
 #peptideGroups %>% map_dbl(function(x) length(x)**2) %>% sum
