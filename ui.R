@@ -156,6 +156,11 @@ fluidPage(
                                    br(),br(),
                                    DT::dataTableOutput("dataFileSelected")
                                )
+                      ),
+                      tabPanel("Decoy Hits",
+                               fluidRow(
+                                   DT::dataTableOutput("dataFileDecoy")
+                               )
                       )
                   )
         )

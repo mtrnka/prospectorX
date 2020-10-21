@@ -162,6 +162,12 @@ function(input, output, session) {
       filter(Decoy=="Target", dvals >= input$svmThreshold)
   })
   
+  xlTableDecoy <- reactive({
+    req(csmTab())
+    tabLevelFiltered() %>% 
+      filter(Decoy!="Target", dvals >= input$svmThreshold)
+  })
+  
   classRatio <- reactiveVal()
   output$numberClassedLinks <- renderText({
     req(tabLevel())
@@ -173,7 +179,7 @@ function(input, output, session) {
   })
   
   output$dataFile <- DT::renderDataTable({
-    req(csmTab())
+    req(xlTable())
     displayTable <- formatXLTable(xlTable())
     wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
                                                  "DB.Peptide.1",
@@ -205,7 +211,7 @@ function(input, output, session) {
   })
   
   output$dataFileSelected <- DT::renderDataTable({
-    req(csmTab())
+    req(xlTableSelected())
     displayTable <- formatXLTable(xlTableSelected())
     wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
                                                  "DB.Peptide.1",
@@ -236,6 +242,38 @@ function(input, output, session) {
     )
   })
 
+  output$dataFileDecoy <- DT::renderDataTable({
+    req(xlTableDecoy())
+    displayTable <- formatXLTable(xlTableDecoy())
+    wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
+                                                 "DB.Peptide.1",
+                                                 "DB.Peptide.2",
+                                                 "Protein.1",
+                                                 "Protein.2",
+                                                 "Peptide.1",
+                                                 "Peptide.2",
+                                                 "Modul.1",
+                                                 "Modul.2",
+                                                 "Fraction"))
+    DT::datatable(displayTable,
+                  options = list(autoWidth=TRUE,
+                                 deferRender=TRUE,
+                                 processing=TRUE,
+                                 columnDefs=list(list(width = '200px', targets = as.list(wideCols))),
+                                 #                                 columnDefs=list(list(width = '200px', targets = c(3,7,8,17,21,26,27))),
+                                 scrollX=TRUE,
+                                 scrollY="80vh",
+                                 scrollCollapse=TRUE,
+                                 paging=TRUE,
+                                 pageLength=100,
+                                 search.caseInsensitive=TRUE,
+                                 scroller=TRUE
+                  ),
+                  filter="top",
+                  escape=FALSE
+    )
+  })
+  
   fdr <- reactiveVal()
   observe({fdr(calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold))})
 
