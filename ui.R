@@ -1,6 +1,8 @@
 fluidPage(
-    #    tags$head(tags$style(HTML(".shiny-text-output {background-color:#fff;}
-    #                              hr {border-top: 0.5px solid #000000;}"))),
+    tags$head(
+        tags$style(HTML("hr {border-top: 0.75px solid #AAAAAA;}"))
+    ),
+    theme = "style.css",
     titlePanel("ProspectorX-Touchstone Demo"),
     div(img(src="UCSF_logo_navy_RGB.png", height="75px"),
         styles="text-align: right"),
@@ -9,53 +11,80 @@ fluidPage(
     sidebarLayout(
         sidebarPanel(width=3,
                      h3("Parameter Selection"),
-                     h4("Search Compare XL Output"),
-                     column(4, style='padding:0px; margin:0px',
-                            shinyFilesButton("clmsData", "Browse...",
-                                             "Select the search compare crosslink output",
-                                             multiple = F, viewtype = "detail")
+                     fluidRow(
+                         column(4, selectInput("experimentType", label = h4("Experiment"),
+                                               choices = list("ms2", "ms3"))
+                         ),
+                         column(8
+                         )
                      ),
-                     column(8, style='padding:0px; margin:0px',
-                            verbatimTextOutput("clmsDataFileName"),
-                            tags$style(type = 'text/css', '#clmsDataFileName {white-space:pre-wrap; padding:7px;}')
+                     h4("Search Compare XL Output"),
+                     fluidRow(
+                         column(4, shinyFilesButton("clmsData", "Browse...",
+                                                    "Select the search compare crosslink output",
+                                                    multiple = F, viewtype = "detail")
+                         ),
+                         column(8, verbatimTextOutput("clmsDataFileName"),
+                                tags$style(type = 'text/css', '#clmsDataFileName {white-space:pre-wrap; padding:7px;}')
+                         )
+                     ),
+                     conditionalPanel(condition = "input.experimentType == 'ms3'",
+                                      h4("MS2 Peaklists"),
+                                      fluidRow(
+                                          column(4, shinyFilesButton("ms2pkls", "Browse...",
+                                                                     "Select the MS2 peaklist files",
+                                                                     multiple = T, viewtype = "detail")
+                                          ),
+                                          column(8, verbatimTextOutput("ms2pklsName"),
+                                                 tags$style(type = 'text/css', '#ms2pklsName {white-space:pre-wrap; padding:7px;}')
+                                          )),
+                                      h4("MS3 Peaklists"),
+                                      fluidRow(
+                                          column(4, shinyFilesButton("ms3pkls", "Browse...",
+                                                                     "Select the MS3 peaklist files",
+                                                                     multiple = T, viewtype = "detail")
+                                          ),
+                                          column(8, verbatimTextOutput("ms3pklsName"),
+                                                 tags$style(type = 'text/css', '#ms3pklsName {white-space:pre-wrap; padding:7px;}')
+                                          ))
                      ),
                      h4("Module File"),
-                     column(4, style='padding:0px; margin:0px',
-                            shinyFilesButton("modules", "Browse...",
-                                             "Select the module file",
-                                             multiple = F, viewtype = "detail")
-                     ),
-                     column(8, style='padding:0px; margin:0px',
-                            verbatimTextOutput("moduleFileName"),
-                            tags$style(type = 'text/css', '#moduleFileName {white-space:pre-wrap; padding:7px;}')
+                     fluidRow(
+                         column(4, shinyFilesButton("modules", "Browse...",
+                                                    "Select the module file",
+                                                    multiple = F, viewtype = "detail")
+                         ),
+                         column(8, verbatimTextOutput("moduleFileName"),
+                                tags$style(type = 'text/css', '#moduleFileName {white-space:pre-wrap; padding:7px;}')
+                         )
                      ),
                      h4("PDB ID"),
-                     column(4, style='padding:0px; margin:0px',
-                            shinyFilesButton("pdbID", "Browse...",
-                                             "Select the pdb/cif file",
-                                             multiple = F, viewtype = "detail")
-                     ),
-                     column(8, style='padding:0px; margin:0px',
-                            verbatimTextOutput("pdbFileName"),
-                            tags$style(type = 'text/css', '#pdbFileName {white-space:pre-wrap; padding:7px;')
+                     fluidRow(
+                         column(4, shinyFilesButton("pdbID", "Browse...",
+                                                    "Select the pdb/cif file",
+                                                    multiple = F, viewtype = "detail")
+                         ),
+                         column(8, verbatimTextOutput("pdbFileName"),
+                                tags$style(type = 'text/css', '#pdbFileName {white-space:pre-wrap; padding:7px;')
+                         )
                      ),
                      h4("Chainmap File"),
-                     column(4, style='padding:0px; margin:0px',
-                            shinyFilesButton("chainmap", "Browse...",
-                                             "Select the chainmap file",
-                                             multiple = F, viewtype = "detail")
+                     fluidRow(
+                         column(4, shinyFilesButton("chainmap", "Browse...",
+                                                    "Select the chainmap file",
+                                                    multiple = F, viewtype = "detail")
+                         ),
+                         column(8, verbatimTextOutput("chainmapFileName"),
+                                tags$style(type = 'text/css', '#chainmapFileName {white-space:pre-wrap; padding:7px;}')
+                         )
                      ),
-                     column(8, style='padding:0px; margin:0px',
-                            verbatimTextOutput("chainmapFileName"),
-                            tags$style(type = 'text/css', '#chainmapFileName {white-space:pre-wrap; padding:7px;}')
-                     ),
+                     tags$hr(),
                      selectInput("summaryLevel", label = h4("Summarization Level"),
                                  choices = list("CSMs",
                                                 "Unique Residue Pairs",
                                                 "Protein Pairs",
                                                 "Module Pairs")
                      ),
-                     tags$hr(),
                      fluidRow(
                          column(6,
                                 sliderInput("targetFDR", "Target FDR", min = 0, max = 25,
@@ -71,6 +100,7 @@ fluidPage(
                          )
                      ),
                      tags$hr(),
+                     h3("Prefiltering"),
                      fluidRow(
                          column(6,
                                 sliderInput("svmThreshold", "Min. SVM Score", min = -5, max = 10, 

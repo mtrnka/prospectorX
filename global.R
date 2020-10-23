@@ -19,14 +19,15 @@ mfloor <- function(x, base=5) {
 }
 
 # Path to MS-Viewer Data
-exDir <- c(wd= './DemoFiles')
-#exDir <- c(wd= '/var/lib/prospector/seqdb/web/results/msviewer/')
-pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
-#pathToXiFile <- "/var/www/crosslink-viewer/demo/data/"
+#exDir <- c(wd= './DemoFiles')
+exDir <- c(wd= '/var/lib/prospector/seqdb/web/results/msviewer/')
+#pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
+pathToXiFile <- "/var/www/crosslink-viewer/demo/data/"
 
 # For generating MS-Viewer Links Correctly
 queryTemplate <- "
-http://rodin05.ucsf.edu/prospector/cgi-bin/mssearch.cgi?search_name=msproduct&
+http://rodin05.ucsf.edu/prospector/cgi-bin/mssearch.cgi?
+search_name=msproduct&
 output_type=HTML&
 report_title=MS-Product&version=6.2.29&
 data_source=Data%20From%20File&
@@ -59,3 +60,38 @@ queryTemplate <- str_split(queryTemplate, "=")
 templateKeys <- map_chr(queryTemplate, function(x) {x[1]})
 templateVals <- map_chr(queryTemplate, function(x) {x[2]})
 templateVals <- url_decode(templateVals)
+
+queryTemplate.ms3 <- "
+http://rodin05.ucsf.edu/prospector/cgi-bin/mssearch.cgi?
+search_name=msproduct&
+output_type=HTML&
+report_title=MS-Product&
+version=6.2.29&
+data_source=Data%20From%20File&
+data_filename=%2fvar%2flib%2fprospector%2fseqdb%2fweb%2fresults%2fmsviewer%2f3%2fk%2f3kobffhhss%2fdssoMS3%2fZ20200519-39_ITMSms3cid.mgf&
+use_instrument_ion_types=1&
+msms_min_precursor_mass=0&
+instrument_name=ESI-ION-TRAP-low-res&
+display_graph=1&
+msms_parent_mass_tolerance=10&
+msms_parent_mass_tolerance_units=ppm&
+fragment_masses_tolerance=0.7&
+fragment_masses_tolerance_units=Da&
+msms_pk_filter=Max%20MSMS%20Pks&
+msms_max_peaks=40&
+fraction=1&
+spot_number=12.704&
+run=1&
+spectrum_number=1&
+max_charge=5&
+msms_precursor_charge=5&
+sequence=ATGDETGAK%28Xlink:DSSO_s_fragment%29VER&
+count_pos_z=Ignore%20Basic%20AA&
+s=1
+"
+
+queryTemplate.ms3 <- unlist(str_split(str_replace_all(queryTemplate.ms3, "\\n", ""), "&"))
+queryTemplate.ms3 <- str_split(queryTemplate.ms3, "=")
+templateKeys.ms3 <- map_chr(queryTemplate.ms3, function(x) {x[1]})
+templateVals.ms3 <- map_chr(queryTemplate.ms3, function(x) {x[2]})
+templateVals.ms3 <- url_decode(templateVals.ms3)

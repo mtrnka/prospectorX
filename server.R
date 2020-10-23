@@ -10,6 +10,8 @@ function(input, output, session) {
   shinyFileChoose(input, "modules", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
   shinyFileChoose(input, "chainmap", roots=exDir, filetypes=c('', 'txt'))
+  shinyFileChoose(input, "ms2pkls", roots=exDir, filetypes=c('', 'txt'))
+  shinyFileChoose(input, "ms3pkls", roots=exDir, filetypes=c('', 'txt'))
 
   output$saveClassified <- downloadHandler(
     filename = function() {
@@ -55,14 +57,49 @@ function(input, output, session) {
     }
   })
   
+  output$ms2pklsName <- renderText({
+    if (is.integer(input$ms2pkls)) {
+      return("No file selected")
+    } else {
+      fnames <- parseFilePaths(exDir, input$ms2pkls)$name
+      fnames <- str_replace(fnames, "\\.[[a-zA-Z0-9]]+?$", "")
+      str_c(fnames, collapse="\n")
+    }
+  })
+  
+  output$ms3pklsName <- renderText({
+    if (is.integer(input$ms3pkls)) {
+      return("No file selected")
+    } else {
+      fnames <- parseFilePaths(exDir, input$ms3pkls)$name
+      fnames <- str_replace(fnames, "\\.[[a-zA-Z0-9]]+?$", "")
+      str_c(fnames, collapse="\n")
+    }
+  })
+  
   scReader <- reactive({
     if (!is.integer(input$clmsData)) {
+      if (input$experimentType == "ms3") {
+        if (!is.integer(input$ms2pkls) & !is.integer(input$ms3pkls)) {
+        inFile <- parseFilePaths(exDir, input$clmsData)
+        ms3Files <- parseFilePaths(exDir, input$ms3pkls)$datapath
+        ms2Files <- parseFilePaths(exDir, input$ms2pkls)$datapath
+        scTable <- processMS3xlinkResultsMultiFile(
+          inFile$datapath, ms3Files, ms2Files
+        )
+        scTable <- scTable %>% mutate(dvals = Score.Diff / 10)
+        consoleMessage("*** Loading Search Compare File ***")
+        return(scTable)
+        }
+      }
+      else {
       inFile <- parseFilePaths(exDir, input$clmsData)
       consoleMessage("*** Loading Search Compare File ***")
       scTable <- readProspectorXLOutput(inFile$datapath)
       consoleMessage("*** Building SVM Classifier ***")
       scTable <- buildClassifier(scTable)
       return(scTable)
+      }
     }
   })
   
@@ -102,15 +139,22 @@ function(input, output, session) {
 
   csmTab <- reactive({
     req(scResults())
-      datTab <- scResults()
-      # The links should be generated in touchStone upon reading the SC file:
-      msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
-      msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
-      msvFiles <- str_replace(msvFiles, "\\/$", "")
+    datTab <- scResults()
+    # The links should be generated in touchStone upon reading the SC file:
+    msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
+    msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
+    msvFiles <- str_replace(msvFiles, "\\/$", "")
+    if (input$experimentType == "ms3") {
+      print("you suck")
       datTab <- datTab %>%
-        mutate(link = pmap_chr(
-          list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum), generateMSViewerLink))
-      datTab <- generateCheckBoxes(datTab)
+        mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
+               Peptide.2 = pmap_chr(list(msvFiles, Fraction, RT.2, z.2, Peptide.2, Spectrum.2), generateMSViewerLink.ms3)
+        )
+    } else {
+      datTab <- datTab %>%
+        mutate(link = pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum), generateMSViewerLink))
+    }
+    datTab <- generateCheckBoxes(datTab)
       minPPM = mfloor(min(datTab$ppm, na.rm=T))
       maxPPM = mfloor(max(datTab$ppm, na.rm=T))
       updateSliderInput(session, "ms1MassError", value = c(minPPM, maxPPM),

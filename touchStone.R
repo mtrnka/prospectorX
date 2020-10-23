@@ -585,6 +585,31 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, sp
     str_c('<a href=\"', zipped, '\" target=\"_blank\">Spectrum</a>')
 }
 
+generateMSViewerLink.ms3 <- function(path, fraction, rt, z, peptide, spectrum) {
+    if(!str_detect(fraction, "\\.[[a-z]]$")) {
+        fraction <- paste0(fraction, ".mgf")
+    }
+    instrumentType <- switch(
+        #        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
+        str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
+        "ESI-Q-high-res",
+        ethcd = "ESI-EThcD-high-res",
+        etd = "ESI-ETD-high-res",
+        hcd = "ESI-Q-high-res",
+        cid = "ESI-ION-TRAP-low-res"
+    )
+    templateVals.ms3[6] <- file.path(path, fraction)
+    templateVals.ms3[9] <- instrumentType
+    templateVals.ms3[18] <- rt
+    templateVals.ms3[20] <- spectrum
+    templateVals.ms3[21] <- z
+    templateVals.ms3[22] <- z
+    templateVals.ms3[23] <- peptide
+    templateVals.ms3 <- url_encode(templateVals.ms3)
+    zipped <- str_c(templateKeys.ms3[1:25], templateVals.ms3[1:25], sep="=", collapse="&")
+    str_c('<a href=\"', zipped, '\" target=\"_blank\">', peptide, '</a>')
+}
+
 generateCheckBoxes <- function(datTab) {
     datTab$selected <- str_c('<input type="checkbox" names="row', datTab$xlinkedResPair, '"value="', datTab$xlinkedResPair, '">',"")
     return(datTab)
@@ -597,13 +622,13 @@ formatXLTable <- function(datTab) {
         select(-starts_with("Res"),
                -starts_with("Decoy"),
                -starts_with("Num\\."),
-               -massError)
+               -any_of("massError"))
     if (sum(!is.na(datTab$distance)) == 0) {
         datTab <- datTab %>%
-            select(-distance)
+            select(-any_of("distance"))
     }
     datTab <- datTab[order(datTab$dvals, decreasing = T),]
-    datTab <- datTab %>% select(any_of(c("selected", "link", "xlinkedResPair",
+    datTab <- datTab %>% select(any_of(c("selected", "link", "link.1", "link.2", "xlinkedResPair",
                                          "xlinkedProtPair", "xlinkedModulPair",
                                 "dvals", "distance", "m.z", "z", "ppm",
                                 "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
@@ -764,10 +789,13 @@ processMS3xlinkResults <- function(ms3results) {
     ms3crosslinksFlat <- map2_dfr(n_ms3$data, n_ms3$ms2cidScanNo, ms3ionFragFind)
     ms3crosslinksFlat$Score.Diff <- ms3crosslinksFlat$Sc.2
     ms3crosslinksFlat <- assignXLinkClass(ms3crosslinksFlat)
-    ms3crosslinksFlat <- lengthFilter(ms3crosslinksFlat, minLen = 4, maxLen = 25)
+    ms3crosslinksFlat <- lengthFilter(ms3crosslinksFlat, minLen = 3, maxLen = 35)
     ms3crosslinksFlat <- scoreFilter(ms3crosslinksFlat, minScore = 0)
     ms3crosslinksFlat <- calculateDecoys(ms3crosslinksFlat)
     ms3crosslinksFlat <- calculatePairs(ms3crosslinksFlat)
+    if (!"distance" %in% names(ms3crosslinksFlat)) {
+        ms3crosslinksFlat$distance <- NA_real_
+    }
     return(ms3crosslinksFlat)
 }
 
@@ -845,6 +873,8 @@ flattenMS3pair <- function(ms3CSM1, ms3CSM2, masterScanNo=NA) {
                       Decoy.1=ms3CSM1$Decoy.ms3,
                       Decoy.2=ms3CSM2$Decoy.ms3,
                       z=ms3CSM1$charge.ms2,
+                      z.1=ms3CSM1$charge.ms3,
+                      z.2=ms3CSM2$charge.ms3,
                       # Parsing of the Xlinked residues is still simplistic
                       # and does not account for site localization ambiguity
                       XLink.AA.1=str_match(ms3CSM1$`Protein.Mods.ms3`, 
@@ -875,6 +905,7 @@ processMS3xlinkResultsMultiFile <- function(scResults, ms3files, ms2files) {
         return()
     }
     datTab <- map_dfr(baseFiles, function(bf) {
+        print(bf)
         p1 <- searchCompareMS3 %>% filter(str_detect(Fraction.ms3, bf)) %>% unnest(cols=c(data))
         p2 <- ms3files[str_which(ms3files, bf)]
         p3 <- ms2files[str_which(ms2files, bf)]
@@ -883,26 +914,6 @@ processMS3xlinkResultsMultiFile <- function(scResults, ms3files, ms2files) {
     return(datTab)
 }
 
-# scResults2 <- "DemoFiles/dssoMS3/ms3dataLarge.txt"
-# ms3files2 <- c("DemoFiles/dssoMS3/Z20200519-31_ITMSms3cid.txt",
-#               "DemoFiles/dssoMS3/Z20200519-39_ITMSms3cid.txt",
-#               "DemoFiles/dssoMS3/Z20200519-49_ITMSms3cid.txt",
-#               "DemoFiles/dssoMS3/Z20200519-59_ITMSms3cid.txt")
-# 
-# ms2files2 <- c("DemoFiles/dssoMS3/Z20200519-31_FTMSms2cid.txt",
-#               "DemoFiles/dssoMS3/Z20200519-39_FTMSms2cid.txt",
-#               "DemoFiles/dssoMS3/Z20200519-49_FTMSms2cid.txt",
-#               "DemoFiles/dssoMS3/Z20200519-59_FTMSms2cid.txt")
-# demo <- processMS3xlinkResultsMultiFile(scResults2, ms3files2, ms2files2)
-# 
-# searchCompareMS3 <- readMS3results(scResults2)
-# searchCompareMS3 <- searchCompareMS3 %>% group_by(Fraction.ms3) %>% nest()
-# baseFiles <- str_replace(searchCompareMS3$Fraction.ms3, "_[[A-Z]]+MSms[[0-9]][[a-z]]+", "")
-# p1 <- searchCompareMS3 %>% filter(str_detect(Fraction.ms3, baseFiles[2])) %>% unnest(cols=c(data))
-# p2 <- ms3files2[str_which(ms3files2, baseFiles[2])]
-# p3 <- ms2files2[str_which(ms2files2, baseFiles[2])]
-
-# processMS3xlinkResultsSingleFile(p1, p2, p3)
 
 # processMS2xlinkResultsBoosted <- function(ms2searchResults, ms3searchTable, dev=F) {
 #     #ms2search results are the S04 object and they should not be processed beyond CSMs ideally.
@@ -1047,28 +1058,28 @@ processMS3xlinkResultsMultiFile <- function(scResults, ms3files, ms2files) {
 # Max number of crosslinks:
 #peptideGroups %>% map_dbl(function(x) length(x)**2) %>% sum
 
-compareFDRs <- function(datTab, classifier="dvals", scalingFactor=10, ...) {
-    class.max <- ceiling(max(datTab[[classifier]]))
-    class.min <- floor(min(datTab[[classifier]]))
-    if (classifier=="dvals") {
-        range.spacing = 0.1
-    } else if (classifier=="Score.Diff") {
-        range.spacing = 0.25
-    } else {
-        range.spacing = abs(class.max - class.min) / 100
-    }
-    class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
-    FDRs <- unlist(lapply(class.range, function(threshold) {
-        calculateFDR(datTab, threshold=threshold, classifier=classifier, scalingFactor=scalingFactor)
-    }))
-    FDRs[is.na(FDRs)] <- 0
-    GTs <- unlist(lapply(class.range, function(threshold) {
-        calculateGT(datTab, threshold=threshold, classifier=classifier)
-    }))
-    GTs[is.na(GTs)] <- 0
-    plot(GTs ~ FDRs, type="l", lwd=2, ...)
-    abline(a = 0, b=1, lt=2, col="red")
-}
+# compareFDRs <- function(datTab, classifier="dvals", scalingFactor=10, ...) {
+#     class.max <- ceiling(max(datTab[[classifier]]))
+#     class.min <- floor(min(datTab[[classifier]]))
+#     if (classifier=="dvals") {
+#         range.spacing = 0.1
+#     } else if (classifier=="Score.Diff") {
+#         range.spacing = 0.25
+#     } else {
+#         range.spacing = abs(class.max - class.min) / 100
+#     }
+#     class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
+#     FDRs <- unlist(lapply(class.range, function(threshold) {
+#         calculateFDR(datTab, threshold=threshold, classifier=classifier, scalingFactor=scalingFactor)
+#     }))
+#     FDRs[is.na(FDRs)] <- 0
+#     GTs <- unlist(lapply(class.range, function(threshold) {
+#         calculateGT(datTab, threshold=threshold, classifier=classifier)
+#     }))
+#     GTs[is.na(GTs)] <- 0
+#     plot(GTs ~ FDRs, type="l", lwd=2, ...)
+#     abline(a = 0, b=1, lt=2, col="red")
+# }
 
 
 fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals") {
@@ -1110,43 +1121,43 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
     title("FDR plot", adj=0)
 }    
 
-assignGroups <- function(datTab, pgroups=peptideGroups) {
-    datTab$group.A <- map_chr(datTab$DB.Peptide.1, function(x) {
-        groupMembership <- map_lgl(pgroups, function(group) {
-            x %in% group
-        })
-        if (sum(groupMembership)==0) {
-            return(NA)
-        } else if (sum(groupMembership) > 1) {
-            return(paste(which(groupMembership), collapse="."))
-        } else {
-            return(which(groupMembership))
-        }
-    })
-    datTab$group.B <- map_chr(datTab$DB.Peptide.2, function(x) {
-        groupMembership <- map_lgl(pgroups, function(group) {
-            x %in% group
-        })
-        if (sum(groupMembership)==0) {
-            return(NA)
-        } else if (sum(groupMembership) > 1) {
-            return(paste(which(groupMembership), collapse="."))
-        } else {
-            return(which(groupMembership))
-        }
-    })
-    datTab[which(datTab$group.A == "2.10" & datTab$group.B == "2"), "group.A"] <- "2"
-    datTab[which(datTab$group.B == "2.10" & datTab$group.A == "2"), "group.B"] <- "2"
-    datTab$group.A[datTab$group.A=="2.10"] <- "10"
-    datTab$group.B[datTab$group.B=="2.10"] <- "10"
-    datTab <- datTab %>% mutate(groundTruth=group.A==group.B)
-    datTab$groundTruth[which(is.na(datTab$groundTruth))] <- FALSE
-    datTab$crosslink <- ifelse(datTab$DB.Peptide.1 < datTab$DB.Peptide.2,
-                               paste(datTab$DB.Peptide.1, datTab$DB.Peptide.2, sep=":"),
-                               paste(datTab$DB.Peptide.2, datTab$DB.Peptide.1, sep=":")
-    )                                     
-    return(datTab)
-}
+# assignGroups <- function(datTab, pgroups=peptideGroups) {
+#     datTab$group.A <- map_chr(datTab$DB.Peptide.1, function(x) {
+#         groupMembership <- map_lgl(pgroups, function(group) {
+#             x %in% group
+#         })
+#         if (sum(groupMembership)==0) {
+#             return(NA)
+#         } else if (sum(groupMembership) > 1) {
+#             return(paste(which(groupMembership), collapse="."))
+#         } else {
+#             return(which(groupMembership))
+#         }
+#     })
+#     datTab$group.B <- map_chr(datTab$DB.Peptide.2, function(x) {
+#         groupMembership <- map_lgl(pgroups, function(group) {
+#             x %in% group
+#         })
+#         if (sum(groupMembership)==0) {
+#             return(NA)
+#         } else if (sum(groupMembership) > 1) {
+#             return(paste(which(groupMembership), collapse="."))
+#         } else {
+#             return(which(groupMembership))
+#         }
+#     })
+#     datTab[which(datTab$group.A == "2.10" & datTab$group.B == "2"), "group.A"] <- "2"
+#     datTab[which(datTab$group.B == "2.10" & datTab$group.A == "2"), "group.B"] <- "2"
+#     datTab$group.A[datTab$group.A=="2.10"] <- "10"
+#     datTab$group.B[datTab$group.B=="2.10"] <- "10"
+#     datTab <- datTab %>% mutate(groundTruth=group.A==group.B)
+#     datTab$groundTruth[which(is.na(datTab$groundTruth))] <- FALSE
+#     datTab$crosslink <- ifelse(datTab$DB.Peptide.1 < datTab$DB.Peptide.2,
+#                                paste(datTab$DB.Peptide.1, datTab$DB.Peptide.2, sep=":"),
+#                                paste(datTab$DB.Peptide.2, datTab$DB.Peptide.1, sep=":")
+#     )                                     
+#     return(datTab)
+# }
 
 removeWeirdDeadEnds <- function(datTab) {
     datTab <- datTab %>% filter(!str_detect(Peptide.1, "Xlink:DSS[[23]]"),
