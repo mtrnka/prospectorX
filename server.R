@@ -10,8 +10,8 @@ function(input, output, session) {
   shinyFileChoose(input, "modules", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
   shinyFileChoose(input, "chainmap", roots=exDir, filetypes=c('', 'txt'))
-  shinyFileChoose(input, "ms2pkls", roots=exDir, filetypes=c('', 'txt'))
-  shinyFileChoose(input, "ms3pkls", roots=exDir, filetypes=c('', 'txt'))
+  shinyFileChoose(input, "ms2pkls", roots=exDir, filetypes=c('', 'txt', 'mgf'))
+  shinyFileChoose(input, "ms3pkls", roots=exDir, filetypes=c('', 'txt', 'mgf'))
 
   output$saveClassified <- downloadHandler(
     filename = function() {
@@ -145,7 +145,6 @@ function(input, output, session) {
     msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
     msvFiles <- str_replace(msvFiles, "\\/$", "")
     if (input$experimentType == "ms3") {
-      print("you suck")
       datTab <- datTab %>%
         mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
                Peptide.2 = pmap_chr(list(msvFiles, Fraction, RT.2, z.2, Peptide.2, Spectrum.2), generateMSViewerLink.ms3)
