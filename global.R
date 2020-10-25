@@ -7,16 +7,14 @@ library(urltools)
 library(e1071)
 source("./touchStone.R")
 
-mfloor <- function(x, base=5) {
-   if (x < 0) {
-      floored <- base * floor(x/base)
-   } else if (x > 0) {
-      floored <- base * ceiling(x/base)
-   } else {
-      floored <- 0
-   } 
-   return(floored)
+mmax <- function(x, base=5) {
+   base * ceiling(x/base)
 }
+
+mmin <- function(x, base=5) {
+   base * floor(x/base)
+}
+
 
 # Path to MS-Viewer Data
 #exDir <- c(wd= './DemoFiles')

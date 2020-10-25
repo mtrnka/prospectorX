@@ -154,15 +154,15 @@ function(input, output, session) {
         mutate(link = pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum), generateMSViewerLink))
     }
     datTab <- generateCheckBoxes(datTab)
-      minPPM = mfloor(min(datTab$ppm, na.rm=T))
-      maxPPM = mfloor(max(datTab$ppm, na.rm=T))
-      updateSliderInput(session, "ms1MassError", value = c(minPPM, maxPPM),
-                        min = minPPM, max = maxPPM)
-      minSVM = mfloor(min(datTab$dvals, na.rm=T), 1)
-      maxSVM = mfloor(max(datTab$dvals, na.rm=T), 1)
-      updateSliderInput(session, "svmThreshold", value = 0,
-                        min = minSVM, max = maxSVM)
-      return(datTab)
+    minPPM = mmin(min(datTab$ppm, na.rm=T))
+    maxPPM = mmax(max(datTab$ppm, na.rm=T))
+    updateSliderInput(session, "ms1MassError", value = c(minPPM, maxPPM),
+                      min = minPPM, max = maxPPM)
+    minSVM = mmin(min(datTab$dvals, na.rm=T), 1)
+    maxSVM = mmax(max(datTab$dvals, na.rm=T), 1)
+    updateSliderInput(session, "svmThreshold", value = 0,
+                      min = minSVM, max = maxSVM)
+    return(datTab)
   })
 
   clTab <- reactive({
