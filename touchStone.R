@@ -1093,7 +1093,7 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
     # }
     minValue <- floor(min(datTab[[classifier]], na.rm = T))
     maxValue <- ceiling(max(datTab[[classifier]], na.rm = T))
-    stepSize = mfloor((maxValue - minValue) / 50, 0.25)
+    stepSize = mmax((maxValue - minValue) / 50, 0.25)
     decoyHist <- hist(datTab[datTab$Decoy=="Decoy", classifier], 
                       breaks=seq(minValue, maxValue, by=stepSize), 
                       plot=F)
