@@ -144,7 +144,6 @@ function(input, output, session) {
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
     msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
     msvFiles <- str_replace(msvFiles, "\\/$", "")
-    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/n/d/ndfayi5a4g/Z20200519-70"
     if (input$experimentType == "ms3") {
       datTab <- datTab %>%
         mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
