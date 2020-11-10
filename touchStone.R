@@ -180,14 +180,14 @@ assignModules <- function(searchTable, moduleFile) {
 calculateDecoys <- function(searchTable) {
     searchTable$Decoy <- "Target"
     decoyReg <- "(^r[[:digit:]]_|^dec|^DECOY)"
-    searchTable[grepl(decoyReg,searchTable$Acc.1) |
-                    grepl(decoyReg,searchTable$Acc.2),
+    searchTable[grepl(decoyReg, searchTable$Acc.1) |
+                    grepl(decoyReg, searchTable$Acc.2),
                 "Decoy"] <- "Decoy"
-    searchTable[grepl(decoyReg,searchTable$Acc.1) &
-                    grepl(decoyReg,searchTable$Acc.2),
+    searchTable[grepl(decoyReg, searchTable$Acc.1) &
+                    grepl(decoyReg, searchTable$Acc.2),
                 "Decoy"] <- "DoubleDecoy"
     searchTable$Decoy2 <- "Target"
-    searchTable[grepl("Decoy",searchTable$Decoy), "Decoy2"] <- "Decoy"
+    searchTable[grepl("Decoy", searchTable$Decoy), "Decoy2"] <- "Decoy"
     searchTable$Decoy2 <- factor(searchTable$Decoy2, levels=c("Decoy","Target"))
     searchTable$Decoy <- factor(searchTable$Decoy, levels=c("DoubleDecoy","Decoy","Target"))
     return(searchTable)
@@ -217,8 +217,8 @@ calculatePairs <- function(searchTable){
 }
 
 assignXLinkClass <- function(searchTable) {
-    intraProteinLinks <- searchTable$Acc.1 == searchTable$Acc.2
-    interProteinLinks <- searchTable$Acc.1 != searchTable$Acc.2
+    intraProteinLinks <- searchTable$Protein.1 == searchTable$Protein.2
+    interProteinLinks <- searchTable$Protein.1 != searchTable$Protein.2
     if (sum(c("Start.1", "Start.2", "End.1", "End.2") %in% names(searchTable)==4)) {
     s1 <- searchTable$Start.1
     s2 <- searchTable$Start.2
@@ -311,7 +311,7 @@ generateErrorTable <- function(datTab, classifier="dvals",
     } else if (classifier=="Score.Diff") {
         range.spacing = 0.25
     } else {
-        range.spacing = abs(class.max - class.min) / 100
+        range.spacing = abs(class.max - class.min) / 200
     }
     class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
     error.rates <- unlist(lapply(class.range, function(threshold) {
@@ -350,7 +350,7 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
     if (threshold < minThreshold) {
         threshold = minThreshold
     }
-    return(list(threshold, errorFUN(datTab, threshold, ...)))
+    return(list(threshold, errorFUN(datTab, threshold, classifier, ...)))
 }
 
 removeDecoys <- function(datTab) {
@@ -524,6 +524,42 @@ buildClassifier <- function(datTab) {
     return(datTab)
 }
 
+buildClassifierExperimental <- function(datTab, params, scoreName) {
+    datTab$massError <- abs(datTab$ppm - mean(datTab$ppm))
+    datTab$charge <- as.factor(datTab$z)
+    if (nrow(datTab) > 30000) {
+        sampleNo <- 15000
+    } else {
+        sampleNo <- nrow(datTab)/2
+    }
+    ind <- sample(nrow(datTab),sampleNo)
+    train <- datTab[ind,]
+    test <- datTab[-1 * ind,]
+    #params <- c("percMatched", "Score.Diff", "charge", "massError", "numCSM","numPPSM", "xlinkClass")
+    #params <- c("Score.Diff", "percMatched", "massError", "charge", "numPPSM", "xlinkClass", "numCSM", "pep2.longest.run")
+    wghts <- numeric(0)
+    wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
+    wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
+    fit <- svm(train$Decoy2 ~., 
+               subset(train, select=params),
+               kernel="linear",
+               cost=0.01,
+               tolerance=0.01,
+               class.weights=wghts
+    )
+    p <- predict(fit, subset(datTab,select=params),decision.values=T)
+    datTab[[scoreName]] <- as.numeric(attr(p,"decision.values"))
+    print(paste("training weights:", round(wghts,2)))
+    tab <- table(datTab$Decoy2, datTab[[scoreName]] > 0)
+    if (tab[1] < tab[3]) {
+        datTab[[scoreName]] <- -1 * datTab[[scoreName]]
+        tab <- table(datTab$Decoy2, datTab[[scoreName]] > 0)
+    }
+    print(tab)
+    print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
+    return(datTab)
+}
+
 buildClassifierMS3 <- function(datTab) {
     datTab$massError <- abs(datTab$ppm)
     if (nrow(datTab) > 30000) {
@@ -558,7 +594,7 @@ buildClassifierMS3 <- function(datTab) {
     return(datTab)
 }
 
-generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, spectrum) {
+generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, spectrum, outputType = "HTML") {
     if(!str_detect(fraction, "\\.[[a-z]]$")) {
         fraction <- paste0(fraction, ".mgf")
     }
@@ -571,6 +607,7 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, sp
         hcd = "ESI-Q-high-res" #Add other instrument types
     )
     linkType <- str_extract(peptide.1, "(?<=\\(\\+).+?(?=\\))")
+    templateVals[2] <- outputType
     templateVals[6] <- file.path(path, fraction)
     templateVals[9] <- instrumentType
     templateVals[18] <- rt
@@ -582,7 +619,11 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, sp
     templateVals[28] <- linkType
     templateVals <- url_encode(templateVals)
     zipped <- str_c(templateKeys[1:28], templateVals[1:28], sep="=", collapse="&")
-    str_c('<a href=\"', zipped, '\" target=\"_blank\">Spectrum</a>')
+    if (outputType == "HTML") {
+        return(str_c('<a href=\"', zipped, '\" target=\"_blank\">Spectrum</a>'))
+    } else {
+        return(zipped)
+    }
 }
 
 generateMSViewerLink.ms3 <- function(path, fraction, rt, z, peptide, spectrum) {
@@ -613,6 +654,88 @@ generateMSViewerLink.ms3 <- function(path, fraction, rt, z, peptide, spectrum) {
 generateCheckBoxes <- function(datTab) {
     datTab$selected <- str_c('<input type="checkbox" names="row', datTab$xlinkedResPair, '"value="', datTab$xlinkedResPair, '">',"")
     return(datTab)
+}
+
+readMSProductInfo <- function(datTab) {
+    require(rvest)
+    require(progress)
+#    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/n/d/ndfayi5a4g/Z20200519-70"
+    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/4/7/4744444444/Z20200519-70"
+    pb <- progress_bar$new(
+        format = " reading spectral match [:bar] :percent eta: :eta",
+        total = nrow(datTab)
+        )
+    ms.product.info <-
+        pmap_chr(list(msvFiles, datTab$Fraction, datTab$RT, datTab$z, 
+                      datTab$Peptide.1, datTab$Peptide.2, datTab$Spectrum, 
+                      "Tab delimited text"), generateMSViewerLink) %>%
+        map(function(msvLink) {
+            spec.html <- read_html(msvLink)
+            spec.node <- html_node(spec.html, xpath = '//*[@id="centerbody"]')
+            spec.table <- read_tsv(html_text(spec.node))
+            pb$tick()
+            return(spec.table)
+        })
+    return(ms.product.info)
+}
+
+getPercentMatched <- function(ms.product.info) {
+    intensities <- map_dfr(ms.product.info, function(x) {
+        matchedIntensity <- sum((!is.na(x$`Peptide #`)) * x$Intensity, na.rm=T)
+        totalIntensity <- sum(x$Intensity, na.rm=T)
+        percentMatched <- matchedIntensity / totalIntensity
+        sums <- x %>% group_by(`Peptide #`) %>%
+            summarize(percIntensity = sum(Intensity, na.rm=T) / totalIntensity, .groups="drop") %>%
+            pivot_wider(names_from = `Peptide #`, values_from = percIntensity, names_prefix = "percInt.pep")
+        sums$percMatched <- percentMatched
+        sums$percDiag.pep1 <- x %>% 
+            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "1") %>% 
+            pull(Intensity) %>% 
+            sum(na.rm=T) / totalIntensity
+        sums$percDiag.pep2 <- x %>% 
+            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "2") %>% 
+            pull(Intensity) %>% 
+            sum(na.rm=T) / totalIntensity
+        return(sums)
+    })
+    replaceVals <- rep(0.0, ncol(intensities))
+    names(replaceVals) <- names(intensities)
+    intensities <- replace_na(intensities, as.list(replaceVals))
+    return(intensities)
+}
+
+longestBackboneIonSeries <- function(ms.product.info) {
+    map_dfr(ms.product.info, function(spectrumTable) {
+        spectrumTable <- spectrumTable %>% 
+            mutate(`Ion Type` = str_replace(`Ion Type`, "^([[yb]]).+", "\\1")) %>%
+            group_by(`Peptide #`, `Ion Type`) %>% 
+            arrange(Index) %>% 
+            nest()
+        pep1.longest <- spectrumTable %>%
+            filter(`Peptide #` == 1) %>%
+            mutate(pep1.longest.run = map_dbl(data,
+                                              function(x) {
+                                                  ions <- unique(x$Index)
+                                                  runLength <- max(rle(ions - lag(ions))$lengths, na.rm=T)
+                                                 # runLength[is.infinite(runLength)] <- 0
+                                              })
+            ) %>%
+            pull(pep1.longest.run) %>% max(na.rm=T)
+        pep1.longest[is.infinite(pep1.longest)] <- 0
+        pep2.longest <- spectrumTable %>%
+            filter(`Peptide #` == 2) %>%
+            mutate(pep2.longest.run = map_dbl(data,
+                                              function(x) {
+                                                  ions <- unique(x$Index)
+                                                  runLength <- max(rle(ions - lag(ions))$lengths, na.rm=T)
+                                                  #runLength[is.infinite(runLength)] <- 0
+                                              })
+            ) %>%
+            pull(pep2.longest.run) %>% max(na.rm=T)
+        pep2.longest[is.infinite(pep2.longest)] <- 0
+        return(tibble(pep1.longest.run = pep1.longest, 
+                      pep2.longest.run = pep2.longest))
+    })
 }
 
 formatXLTable <- function(datTab) {

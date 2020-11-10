@@ -15,7 +15,6 @@ mmin <- function(x, base=5) {
    base * floor(x/base)
 }
 
-
 # Path to MS-Viewer Data
 #exDir <- c(wd= './DemoFiles')
 exDir <- c(wd= '/var/lib/prospector/seqdb/web/results/msviewer/')
