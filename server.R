@@ -5,6 +5,30 @@ function(input, output, session) {
   output$consoleOut <- renderText({
     consoleMessage()
   })
+
+  output$svmThreshSliders <- renderUI({
+    if (input$separateFDRs) {
+      tagList(
+        sliderInput("svmThresholdIntra", "IntraProtein", min = -5, max = 10,
+                    step = 0.1, value = -5),
+        sliderInput("svmThresholdInter", "InterProtein", min = -5, max = 10,
+                    step = 0.1, value = 0)
+      )
+    } else {
+      sliderInput("svmThreshold", "SVM Score", min = -5, max = 10,
+                  step = 0.1, value = 0)
+    }
+  })
+  # output$svmThreshSliders <- renderUI({
+  #   tagList(
+  #     sliderInput("svmThresholdIntra", "IntraProtein", min = -5, max = 10, 
+  #                 step = 0.1, value = -5),
+  #     sliderInput("svmThresholdInter", "InterProtein", min = -5, max = 10, 
+  #                 step = 0.1, value = 0),
+  #     sliderInput("svmThreshold", "SVM Score", min = -5, max = 10, 
+  #                 step = 0.1, value = 0)
+  #   )
+  # })
   
   shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "modules", roots=exDir, filetypes=c('', 'txt'))
@@ -160,11 +184,18 @@ function(input, output, session) {
                       min = minPPM, max = maxPPM)
     minSVM = mmin(min(datTab$dvals, na.rm=T), 1)
     maxSVM = mmax(max(datTab$dvals, na.rm=T), 1)
-    updateSliderInput(session, "svmThreshold", value = 0,
-                      min = minSVM, max = maxSVM)
+    if (input$separateFDRs) {
+      updateSliderInput(session, "svmThresholdInter", value = 0,
+                       min = minSVM, max = maxSVM)
+      updateSliderInput(session, "svmThresholdIntra", value = -5,
+                       min = minSVM, max = maxSVM)
+    } else {
+      updateSliderInput(session, "svmThreshold", value = 0,
+                        min = minSVM, max = maxSVM)
+    }
     return(datTab)
   })
-
+  
   clTab <- reactive({
     consoleMessage("*** Calculating Residue-Pairs ***")
     bestResPair(csmTab())
@@ -201,14 +232,32 @@ function(input, output, session) {
   
   xlTable <- reactive({
     req(csmTab())
-    tabLevelFiltered() %>% 
-      filter(Decoy=="Target", dvals >= input$svmThreshold)
+    if (input$separateFDRs) {
+      req(input$svmThresholdIntra, input$svmThresholdInter)
+      tabLevelFiltered() %>% 
+        filter(Decoy=="Target",
+               (str_detect(xlinkClass, "intraProtein") & dvals >= input$svmThresholdIntra) |
+                 (str_detect(xlinkClass, "interProtein") & dvals >= input$svmThresholdInter))
+    } else {
+      req(input$svmThreshold)
+      tabLevelFiltered() %>% 
+        filter(Decoy=="Target", dvals >= input$svmThreshold)
+    }
   })
   
   xlTableDecoy <- reactive({
     req(csmTab())
-    tabLevelFiltered() %>% 
-      filter(Decoy!="Target", dvals >= input$svmThreshold)
+    if (input$separateFDRs) {
+      req(input$svmThresholdIntra, input$svmThresholdInter)
+      tabLevelFiltered() %>% 
+        filter(Decoy!="Target",
+               (str_detect(xlinkClass, "intraProtein") & dvals >= input$svmThresholdIntra) |
+                 (str_detect(xlinkClass, "interProtein") & dvals >= input$svmThresholdInter))
+    } else {
+      req(input$svmThreshold)
+      tabLevelFiltered() %>% 
+        filter(Decoy!="Target", dvals >= input$svmThreshold)
+    }
   })
   
   classRatio <- reactiveVal()
@@ -318,27 +367,79 @@ function(input, output, session) {
   })
   
   fdr <- reactiveVal()
-  observe({fdr(calculateFDR(tabLevelFiltered(), threshold = input$svmThreshold))})
-
+  observe({
+    if (input$separateFDRs) {
+      req(input$svmThresholdIntra, input$svmThresholdInter)
+      fdr(calculateSeparateFDRs(tabLevelFiltered(),
+                                thresholdIntra = input$svmThresholdIntra,
+                                thresholdInter = input$svmThresholdInter,
+                                scalingFactor = input$scalingFactor)
+      )
+    } else {
+      req(input$svmThreshold)
+      fdr(calculateFDR(tabLevelFiltered(),
+                       threshold = input$svmThreshold,
+                       scalingFactor = input$scalingFactor)
+      )
+    }
+  })
+  
   output$FDR <- renderText({
     req(tabLevel())
     str_c("FDR: ", as.character(round(100 * fdr(), 2)), "%")
   })
 
   output$FDRplot <- renderPlot({
-    req(tabLevel())
-    fdrPlots(tabLevelFiltered(), cutoff = input$svmThreshold)
+    req(tabLevelFiltered())
+    if(input$separateFDRs) {
+      par(mfrow=c(2, 1),
+          mar=c(2.1, 4.1, 4.1, 2.1),
+          oma=c(3.1, 0, 0, 0))
+      plotMin <- mmin(min(tabLevelFiltered()$dvals), 1)
+      plotMax <- mmax(max(tabLevelFiltered()$dvals), 1)
+      fdrPlots(filter(tabLevelFiltered(), str_detect(xlinkClass, "intraProtein")), 
+               scalingFactor = input$scalingFactor, cutoff=input$svmThresholdIntra,
+               minValue = plotMin, maxValue = plotMax, title = "intraProtein FDR", 
+               xlabel=NA, addLegend=F)
+      fdrPlots(filter(tabLevelFiltered(), str_detect(xlinkClass, "interProtein")), 
+               scalingFactor = input$scalingFactor, cutoff=input$svmThresholdInter,
+               minValue = plotMin, maxValue = plotMax, title = "interProtein FDR")
+    } else {
+      fdrPlots(tabLevelFiltered(), 
+               cutoff = input$svmThreshold,
+               scalingFactor = input$scalingFactor, 
+               title = "FDR plot")
+    }
   })
-
+  
   numHits <- reactiveVal()
-  observe({numHits(generateErrorTable(tabLevelFiltered()))})
+  observe({
+    if(input$separateFDRs) {
+      numHits(generateErrorTableSeparate(tabLevelFiltered(), 
+                                         scalingFactor = input$scalingFactor))
+    } else {
+      numHits(generateErrorTable(tabLevelFiltered(),
+                                 scalingFactor = input$scalingFactor)
+      )
+    }
+  })
   
   observeEvent(input$findThreshold, {
     req(tabLevel())
-    threshold <- findThreshold(tabLevelFiltered(), targetER = input$targetFDR / 100)
-    updateSliderInput(session, "svmThreshold", value = threshold[[1]])
+    if (input$separateFDRs) {
+      threshold <- findSeparateThresholds(tabLevelFiltered(),
+                                          targetER = input$targetFDR / 100,
+                                          scalingFactor = input$scalingFactor)
+      updateSliderInput(session, "svmThresholdIntra", value = threshold$intraThresh)
+      updateSliderInput(session, "svmThresholdInter", value = threshold$interThresh)
+    } else {
+      threshold <- findThreshold(tabLevelFiltered(),
+                                 targetER = input$targetFDR / 100,
+                                 scalingFactor = input$scalingFactor)
+      updateSliderInput(session, "svmThreshold", value = threshold$globalThresh)
+    }
   })
-
+  
   output$IIratio <- renderText({
     req(tabLevel())
     str_c("percent interProtein: ", round(100*classRatio(),1), "%")
@@ -364,7 +465,7 @@ function(input, output, session) {
   })
 
   classedMassErrors <- reactive({
-    subset(tabLevelFiltered(), dvals >= input$svmThreshold)$ppm
+    subset(xlTable())$ppm
   })
 
   VR <- reactive({

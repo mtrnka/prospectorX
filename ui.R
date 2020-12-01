@@ -15,7 +15,8 @@ fluidPage(
                          column(4, selectInput("experimentType", label = h4("Experiment"),
                                                choices = list("ms2", "ms3"))
                          ),
-                         column(8
+                         column(8, numericInput("scalingFactor", label = h4("Decoy Scaling Factor"),
+                                            min = 1, max = 10, value = 10, step = 1)
                          )
                      ),
                      h4("Search Compare XL Output"),
@@ -82,13 +83,14 @@ fluidPage(
                      selectInput("summaryLevel", label = h4("Summarization Level"),
                                  choices = list("CSMs",
                                                 "Unique Residue Pairs",
-                                                "Protein Pairs",
-                                                "Module Pairs")
+                                                "Protein Pairs")
                      ),
                      fluidRow(
                          column(6,
                                 sliderInput("targetFDR", "Target FDR", min = 0, max = 25,
                                             step = 0.5, value = 1.0),
+                                checkboxInput("separateFDRs", "Separate FDRs?",
+                                              value = FALSE),
                                 actionButton("findThreshold", "Classify")
                          ),
                          column(6,
@@ -103,8 +105,8 @@ fluidPage(
                      h3("Prefiltering"),
                      fluidRow(
                          column(6,
-                                sliderInput("svmThreshold", "Min. SVM Score", min = -5, max = 10, 
-                                            step = 0.1, value = 0),
+                                h4("min SVM Score"),
+                                uiOutput("svmThreshSliders"),
                                 br(),
                                 sliderInput("scoreDiffThreshold", "Min. Score.Diff", min = 0, max = 30,
                                             step = 0.5, value = 5),

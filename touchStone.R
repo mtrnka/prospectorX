@@ -263,8 +263,7 @@ scoreFilter <- function(searchTable, minScore=0) {
     return(searchTable)
 }
 
-calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFactor=10) {
-    datTab <- datTab[datTab[[classifier]] >= threshold, ]
+calculateDecoyFractions <- function(datTab, scalingFactor=10) {
     fdrTable <- table(datTab$Decoy)
     if (is.na(fdrTable["DoubleDecoy"])) {fdrTable["DoubleDecoy"] <- 0}
     if (is.na(fdrTable["Decoy"])) {fdrTable["Decoy"] <- 0}
@@ -272,7 +271,29 @@ calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFact
     ffTT <- fdrTable[["DoubleDecoy"]] / (scalingFactor ** 2)
     ftTT <- (fdrTable[["Decoy"]] / scalingFactor) - 
         (2 * fdrTable[["DoubleDecoy"]] / (scalingFactor ** 2))
-    fdr <- (ffTT + ftTT) / fdrTable[["Target"]]
+    TT <- fdrTable[["Target"]]
+    return(c("TT"=TT, "ftTT"=ftTT, "ffTT"=ffTT))
+}
+
+calculateFDR <- function(datTab, threshold=-100, classifier="dvals", scalingFactor=10) {
+    datTab <- datTab[datTab[[classifier]] >= threshold, ]
+    decoyFractions <- calculateDecoyFractions(datTab, scalingFactor)
+    fdr <- (decoyFractions["ffTT"] + decoyFractions["ftTT"]) / decoyFractions["TT"]
+    names(fdr) <- NULL
+    return(fdr)
+}
+
+calculateSeparateFDRs <- function(datTab, thresholdIntra = -100, thresholdInter = -100, 
+                                  classifier="dvals", scalingFactor=10) {
+    intraHits <- datTab[str_detect(datTab$xlinkClass, "intraProtein"),]
+    interHits <- datTab[str_detect(datTab$xlinkClass, "interProtein"),]
+    intraHits <- intraHits[intraHits[[classifier]] >= thresholdIntra, ]
+    interHits <- interHits[interHits[[classifier]] >= thresholdInter, ]
+    intraFractions <- calculateDecoyFractions(intraHits, scalingFactor)
+    interFractions <- calculateDecoyFractions(interHits, scalingFactor)
+    decoyFractions <- intraFractions + interFractions
+    fdr <- (decoyFractions["ffTT"] + decoyFractions["ftTT"]) / decoyFractions["TT"]
+    names(fdr) <- NULL
     return(fdr)
 }
 
@@ -306,13 +327,13 @@ generateErrorTable <- function(datTab, classifier="dvals",
                                errorFUN=calculateFDR, ...) {
     class.max <- ceiling(max(datTab[[classifier]]))
     class.min <- floor(min(datTab[[classifier]]))
-    if (classifier=="dvals") {
-        range.spacing = 0.1
-    } else if (classifier=="Score.Diff") {
-        range.spacing = 0.25
-    } else {
-        range.spacing = abs(class.max - class.min) / 200
-    }
+    # if (classifier=="dvals") {
+    #     range.spacing = 0.1
+    # } else if (classifier=="Score.Diff") {
+    #     range.spacing = 0.25
+    # } else {
+    range.spacing = abs(class.max - class.min) / 200
+    # }
     class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
     error.rates <- unlist(lapply(class.range, function(threshold) {
         errorFUN(datTab, threshold=threshold, classifier=classifier, ...)
@@ -321,11 +342,30 @@ generateErrorTable <- function(datTab, classifier="dvals",
     #plot(error.rates ~ class.range, type="l")
     
     num.hits <- map_dfr(class.range, function(threshold) {
-        calculateHits(removeDecoys(datTab), threshold=threshold, classifier=classifier, ...)
+        calculateHits(removeDecoys(datTab), threshold=threshold, classifier=classifier)
     })
     num.hits$fdr <- error.rates
     num.hits$total <- num.hits$inter + num.hits$intra
     return(num.hits)
+}
+
+generateErrorTableSeparate <- function(datTab, classifier="dvals",
+                                       errorFUN=calculateFDR, ...) {
+    intraHits <- generateErrorTable(filter(datTab, str_detect(xlinkClass, "intraProtein")),
+                                    classifier=classifier, errorFUN=errorFUN, ...)
+    interHits <- generateErrorTable(filter(datTab, str_detect(xlinkClass, "interProtein")),
+                                    classifier=classifier, errorFUN=errorFUN, ...)
+    max.fdr <- mmax(max(intraHits$fdr, interHits$fdr), 0.05)
+    fdr.spacing <- max.fdr / 50
+    fdr.seq <- seq(0, max.fdr, fdr.spacing)
+    
+    fdr.seq %>% map_dfr(function(i) {
+        intra <- intraHits %>% slice(which.min(abs(fdr - i))) %>%
+            pull(intra)
+        inter <- interHits %>% slice(which.min(abs(fdr - i))) %>%
+            pull(inter)
+        tibble(thresh = NA, intra, inter, fdr = i, total = intra + inter)
+    })
 }
 
 findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
@@ -350,7 +390,26 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
     if (threshold < minThreshold) {
         threshold = minThreshold
     }
-    return(list(threshold, errorFUN(datTab, threshold, classifier, ...)))
+    return(list("globalThresh"=threshold, "correspondingFDR" = errorFUN(datTab, threshold, classifier, ...)))
+}
+
+findSeparateThresholds <- function(datTab, targetER=0.05, minThreshold=-5,
+                                   classifier="dvals", errorFUN=calculateFDR, ...) {
+    interTab <- datTab %>% 
+        filter(str_detect(xlinkClass, "inter"))
+    interThresh <- findThreshold(interTab, targetER, minThreshold, classifier, errorFUN, ...)[[1]]
+    intraTab <- datTab %>% 
+        filter(str_detect(xlinkClass, "intra"))
+    intraThresh <- findThreshold(intraTab, targetER, minThreshold, classifier, errorFUN, ...)[[1]]
+    return(list("intraThresh"=intraThresh, "interThresh"=interThresh))
+}
+
+calculateSeparateHits <- function(datTab, thresholds = c("intraThresh"=-100, "interThresh"=-100), classifier="dvals") {
+    datTab.intra <- datTab[datTab[[classifier]] >= thresholds["intraThresh"], ]
+    intra <- sum(str_count(datTab.intra$xlinkClass, "intraProtein"))
+    datTab.inter <- datTab[datTab[[classifier]] >= thresholds["interThresh"], ]
+    inter <- sum(str_count(datTab.inter$xlinkClass, "interProtein"))
+    return(tibble("thresh"=thresholds["interThresh"], "intra"=intra, "inter"=inter))
 }
 
 removeDecoys <- function(datTab) {
@@ -659,8 +718,7 @@ generateCheckBoxes <- function(datTab) {
 readMSProductInfo <- function(datTab) {
     require(rvest)
     require(progress)
-#    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/n/d/ndfayi5a4g/Z20200519-70"
-    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/4/7/4744444444/Z20200519-70"
+    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/v/h/vh7gv76czk/dssoStar_stHCD"
     pb <- progress_bar$new(
         format = " reading spectral match [:bar] :percent eta: :eta",
         total = nrow(datTab)
@@ -1204,18 +1262,13 @@ processMS3xlinkResultsMultiFile <- function(scResults, ms3files, ms2files) {
 #     abline(a = 0, b=1, lt=2, col="red")
 # }
 
-
-fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals") {
+fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals",
+                     minValue = floor(min(datTab[[classifier]], na.rm = T)),
+                     maxValue = ceiling(max(datTab[[classifier]], na.rm = T)),
+                     addLegend = T,
+                     title = "FDR plot",
+                     xlabel = "SVM Score") {
     datTab <- as.data.frame(datTab)
-    # if (classifier=="dvals") {
-    #     stepSize = 0.5
-    # } else if (classifier=="Score.Diff") {
-    #     stepSize = 1
-    # } else {
-    #     stepSize = 0.5
-    # }
-    minValue <- floor(min(datTab[[classifier]], na.rm = T))
-    maxValue <- ceiling(max(datTab[[classifier]], na.rm = T))
     stepSize = mmax((maxValue - minValue) / 50, 0.25)
     decoyHist <- hist(datTab[datTab$Decoy=="Decoy", classifier], 
                       breaks=seq(minValue, maxValue, by=stepSize), 
@@ -1234,14 +1287,16 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="dvals")
     diffHist$counts <- targetHist$counts - decoyHist$counts - doubleDecoyHist$counts
     displayLim =c(minValue,maxValue)
     plot(targetHist, col="lightblue", xlim=displayLim, 
-         xlab="SVM Score", main=NA)
+         xlab=xlabel, main=NA)
     plot(decoyHist, add=T, col="salmon")
     plot(doubleDecoyHist, add=T, col="goldenrod1")
     abline(v=cutoff, lwd=2, lt=1, col="red")
-    legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
-           fill = c("lightblue", "salmon", "goldenrod1"),
-           bty="n")
-    title("FDR plot", adj=0)
+    if (addLegend) {
+        legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
+               fill = c("lightblue", "salmon", "goldenrod1"),
+               bty="n")
+    }
+    title(title, adj=0)
 }    
 
 # assignGroups <- function(datTab, pgroups=peptideGroups) {
@@ -1406,20 +1461,23 @@ distancePlot <- function(targetDists, randomDists, threshold) {
            bty="n")
 }
 
-numHitsPlot <- function(num.hits, threshold) {
+numHitsPlot <- function(num.hits, threshold=0) {
     num.hits <- num.hits %>%
+        filter(!is.infinite(fdr), total >= 0.025 * max(total, na.rm=T)) %>%
         pivot_longer(cols=c(-fdr,-thresh),
                      names_to="crosslinkClass",
-                     values_to="numHits")
+                     values_to="numHits") %>%
+        filter(!is.na(numHits))
     p <- num.hits %>% ggplot(aes(x=fdr, y=numHits)) +
-        geom_line(aes(col=crosslinkClass), na.rm=T) +
+        geom_path(aes(col=crosslinkClass), na.rm=T, size=1.25) +
         theme_bw() +
         theme(legend.position="right") +
-        scale_color_brewer(type="qual", palette="Set1") +
+        scale_color_brewer(type="qual", palette="Paired") +
         xlab("FDR") +
         ylab("Num Hits") +
         ggtitle("Num Hits vs FDR") +
-        theme(plot.title = element_text(face = "bold", size = 14))
+        theme(plot.title = element_text(face = "bold", size = 14),
+              )
     p <- p + geom_vline(xintercept = threshold,
                         col="red", size=1.25)
     print(p)
