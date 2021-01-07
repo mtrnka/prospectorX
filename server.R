@@ -628,7 +628,8 @@ function(input, output, session) {
     withProgress(message = "scraping MS-Product", value = 0, {
       numPoints <- nrow(datTab)
       ms.product.info <- datTab %>%
-        pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum,
+        pmap_chr(list(msvFiles, datTab$Fraction, datTab$RT, datTab$z, 
+                      datTab$Peptide.1, datTab$Peptide.2, datTab$Spectrum,
                       "Tab delimited text"), generateMSViewerLink) %>%
         map(function(msvLink) {
           spec.html <- read_html(msvLink)
