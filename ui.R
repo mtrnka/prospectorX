@@ -15,7 +15,7 @@ fluidPage(
                          column(4, selectInput("experimentType", label = h4("Experiment"),
                                                choices = list("ms2", "ms3"))
                          ),
-                         column(8, numericInput("scalingFactor", label = h4("Decoy Scaling Factor"),
+                         column(8, numericInput("scalingFactor", label = h4("DecoyDB Factor"),
                                             min = 1, max = 10, value = 10, step = 1)
                          )
                      ),
@@ -99,6 +99,8 @@ fluidPage(
                                 br(),br(),
                                 actionButton("viewXiNet", label = "View in xiNet"),
                                 uiOutput("ui_open_tab"),
+                                br(),br(),
+                                actionButton("ScrapeMSP", label = "Scrape MS Product")
                          )
                      ),
                      tags$hr(),

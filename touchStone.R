@@ -1,4 +1,5 @@
 print("touchStone module loaded")
+proton <- 1.007276
 
 readProspectorXLOutput <- function(inputFile){
     dataTable <- read_tsv(inputFile)
@@ -346,6 +347,7 @@ generateErrorTable <- function(datTab, classifier="dvals",
     })
     num.hits$fdr <- error.rates
     num.hits$total <- num.hits$inter + num.hits$intra
+    num.hits <- num.hits %>% filter(total > 0)
     return(num.hits)
 }
 
@@ -379,16 +381,16 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
         error.cross[i] <- error.diff[i] > 0 & error.diff[i+1] <= 0
     }
     if (sum(error.cross)==0 & error.diff[1] < 0) {
-        threshold=minThreshold
+        threshold <- minThreshold
     } else if (sum(error.cross)==0 & error.diff[1] > 0) {
-        threshold=class.max
+        threshold <- max(class.range)
         print("no acceptable threshold found")
     } else {
         firstCross <- which(error.cross)[1] + 1
         threshold <- class.range[firstCross]
     }
     if (threshold < minThreshold) {
-        threshold = minThreshold
+        threshold <- minThreshold
     }
     return(list("globalThresh"=threshold, "correspondingFDR" = errorFUN(datTab, threshold, classifier, ...)))
 }
@@ -665,7 +667,7 @@ generateMSViewerLink <- function(path, fraction, rt, z, peptide.1, peptide.2, sp
         etd = "ESI-ETD-high-res",
         hcd = "ESI-Q-high-res" #Add other instrument types
     )
-    linkType <- str_extract(peptide.1, "(?<=\\(\\+).+?(?=\\))")
+    linkType <- str_extract(peptide.1, "(?<=\\(\\+).+?(?=\\)([[A-Z]]|$|-))")
     templateVals[2] <- outputType
     templateVals[6] <- file.path(path, fraction)
     templateVals[9] <- instrumentType
@@ -718,7 +720,8 @@ generateCheckBoxes <- function(datTab) {
 readMSProductInfo <- function(datTab) {
     require(rvest)
     require(progress)
-    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/v/h/vh7gv76czk/dssoStar_stHCD"
+#    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/A/V/AV11111111/Z20201215hcd"
+    msvFiles <- "/var/lib/prospector/seqdb/web/results/msviewer/A/V/AV22222222/Z20201215ethcd"
     pb <- progress_bar$new(
         format = " reading spectral match [:bar] :percent eta: :eta",
         total = nrow(datTab)
@@ -889,7 +892,7 @@ getLineNos <- function(mgfFile, scanNo) {
 }
 
 calculatePrecMass <- function(pepMass, charge) {
-    precMass <- pepMass * charge - 1.007276 * charge
+    precMass <- pepMass * charge - proton * charge
     return(precMass)
 }
 
@@ -952,7 +955,8 @@ readMS3results <- function(ms3SearchTable){
     ms3results$Decoy.ms3 <- ifelse(str_detect(ms3results$Acc.ms3, "decoy"),
                                    "DECOY", "Target")
     ms3results <- ms3results %>% 
-        filter(str_detect(Protein.Mods.ms3, "Xlink:DSSO_[[as]]_fragment"))
+#        filter(str_detect(Protein.Mods.ms3, "Xlink:DSSO_[[as]]_fragment"))
+        filter(str_detect(Protein.Mods.ms3, "XL:A-[[a-zA-Z\\(\\)]]+"))
     return(ms3results)
 }
 
@@ -968,6 +972,9 @@ processMS3xlinkResults <- function(ms3results) {
     n_ms3 <- ms3results %>% group_by(ms2cidScanNo) %>% nest()
     n_ms3 <- n_ms3 %>% mutate(scanGroupSize = map_int(data, ~nrow(.)))
     ms3crosslinksFlat <- map2_dfr(n_ms3$data, n_ms3$ms2cidScanNo, ms3ionFragFind)
+    ms3crosslinksFlatMis <- map2_dfr(n_ms3$data, n_ms3$ms2cidScanNo, ms3ionFragFind, tol=25, mis=proton)
+    ms3crosslinksFlatMis2 <- map2_dfr(n_ms3$data, n_ms3$ms2cidScanNo, ms3ionFragFind, tol=25, mis=2*proton)
+    ms3crosslinksFlat <- rbind(ms3crosslinksFlatMis2, ms3crosslinksFlatMis, ms3crosslinksFlat)
     ms3crosslinksFlat$Score.Diff <- ms3crosslinksFlat$Sc.2
     ms3crosslinksFlat <- assignXLinkClass(ms3crosslinksFlat)
     ms3crosslinksFlat <- lengthFilter(ms3crosslinksFlat, minLen = 3, maxLen = 35)
@@ -986,28 +993,52 @@ getMassError <- function(targetMass, testMass) {
     return(massDiff)
 }
 
-ms3ionFragFind <- function(scanGroupTibble, masterScanNo) {
-    scanGroupTibble <- scanGroupTibble %>% 
-        filter(!is.na(str_match(Protein.Mods.ms3, "Xlink:DSSO_[[as]]_fragment@([[0-9]]+)")[,2]))
-    ms2Mass <- scanGroupTibble$precMass.ms2[1]
+ms3ionFragFind <- function(scanGroupTibble, masterScanNo, tol = 25, mis = 0) {
+    H2O <- 18.01002
+    ms2Mass <- scanGroupTibble$precMass.ms2[1] - mis
     scanGroupSize <- nrow(scanGroupTibble)
     if (scanGroupSize < 2) {
         return(data.frame())
     }
-    pairedIons <- combn(scanGroupTibble$precMass.ms3, 2)
-    pairedIndex <- combn(1:scanGroupSize, 2)
-    summedPairs <- apply(pairedIons, 2, function(x) sum(x) + 18.01002)
-    matchesMS2 <- unlist(lapply(summedPairs, getMassError, ms2Mass))
-    CSMs <- which(abs(matchesMS2) <= 25) # +/-25 ppm mass error for ms2 ions
-    if (length(CSMs) == 0) return(data.frame())
-    placeHolder <- vector("list", length(CSMs))
+    scanGroupTibble$alkene <- str_detect(scanGroupTibble$Protein.Mods.ms3, "Alkene@[[0-9\\|]]+")
+    scanGroupTibble$thiol <- str_detect(scanGroupTibble$Protein.Mods.ms3, "Thiol\\(Unsaturated\\)@[[0-9\\|]]+")
+    scanGroupTibble$sulfenic <- str_detect(scanGroupTibble$Protein.Mods.ms3, "Sulfenic@[[0-9\\|]]+")
+    summedPairs <- scanGroupTibble$precMass.ms3 %o% rep(1, scanGroupSize) +
+        rep(1, scanGroupSize) %o% scanGroupTibble$precMass.ms3
+    massErrors.AT <- getMassError(ms2Mass, summedPairs + H2O)
+    matchesMS2 <- abs(massErrors.AT) <= tol
+    allowed <- scanGroupTibble$alkene %o% scanGroupTibble$thiol
+    ATpairs <- which(matchesMS2 * allowed == 1)
+    massErrors.AS <- getMassError(ms2Mass, summedPairs)
+    matchesMS2 <- abs(massErrors.AS) <= tol
+    allowed <- scanGroupTibble$alkene %o% scanGroupTibble$sulfenic
+    ASpairs <- which(matchesMS2 * allowed == 1)
+    numMatches <- length(c(ATpairs, ASpairs))
+    dimensions <- dim(allowed)
+    if (numMatches==0) return(data.frame())
+    placeHolder <- vector("list", numMatches)
     index = 1
-    for (CSM in CSMs) {
-        massError <- matchesMS2[CSM]
-        peptidePair <- pairedIndex[,CSM]
-        flatMS3pair <- flattenMS3pair(scanGroupTibble[peptidePair[1],],
-                                      scanGroupTibble[peptidePair[2],],
-                                      masterScanNo)
+    for (CSM in ATpairs) {
+        massError <- massErrors.AT[CSM]
+        peptidePair <- arrayInd(CSM, dimensions)
+        flatMS3pair <- flattenMS3pair(scanGroupTibble[peptidePair[,1],],
+                                      scanGroupTibble[peptidePair[,2],],
+                                      masterScanNo,
+                                      frag1="Alkene", frag2="Thiol\\(Unsaturated\\)")
+        flatMS3pair$ppm <- massError
+        if (is.na(flatMS3pair$XLink.AA.1) | is.na(flatMS3pair$XLink.AA.2)) {
+            flatMS3pair <- data.frame()
+        }
+        placeHolder[[index]] <- flatMS3pair
+        index = index + 1
+    }
+    for (CSM in ASpairs) {
+        massError <- massErrors.AS[CSM]
+        peptidePair <- arrayInd(CSM, dimensions)
+        flatMS3pair <- flattenMS3pair(scanGroupTibble[peptidePair[,1],],
+                                      scanGroupTibble[peptidePair[,2],],
+                                      masterScanNo,
+                                      frag1="Alkene", frag2="Sulfenic")
         flatMS3pair$ppm <- massError
         if (is.na(flatMS3pair$XLink.AA.1) | is.na(flatMS3pair$XLink.AA.2)) {
             flatMS3pair <- data.frame()
@@ -1018,11 +1049,15 @@ ms3ionFragFind <- function(scanGroupTibble, masterScanNo) {
     return(do.call(rbind, placeHolder))
 }
 
-flattenMS3pair <- function(ms3CSM1, ms3CSM2, masterScanNo=NA) {
+flattenMS3pair <- function(ms3CSM1, ms3CSM2, masterScanNo=NA,
+                           frag1="Alkene", frag2="Thiol\\(Unsaturated\\)") {
     if (ms3CSM1$Expect.ms3 > ms3CSM2$Expect.ms3) {
         tempCSM <- ms3CSM1
         ms3CSM1 <- ms3CSM2
         ms3CSM2 <- tempCSM
+        tempFrag <- frag1
+        frag1 <- frag2
+        frag2 <- tempFrag
     }
     flatCSM <- tibble(ms2cidScanNo=masterScanNo,
                       MSMS.Info.1=ms3CSM1$`ms3ScanNo`,
@@ -1056,13 +1091,18 @@ flattenMS3pair <- function(ms3CSM1, ms3CSM2, masterScanNo=NA) {
                       z=ms3CSM1$charge.ms2,
                       z.1=ms3CSM1$charge.ms3,
                       z.2=ms3CSM2$charge.ms3,
-                      # Parsing of the Xlinked residues is still simplistic
-                      # and does not account for site localization ambiguity
-                      XLink.AA.1=str_match(ms3CSM1$`Protein.Mods.ms3`, 
-                                           "Xlink:DSSO_[[as]]_fragment@([[0-9]]+)")[2],
-                      XLink.AA.2=str_match(ms3CSM2$`Protein.Mods.ms3`, 
-                                           "Xlink:DSSO_[[as]]_fragment@([[0-9]]+)")[2]
-    )
+                      # Parsing the residue ids still needs to account for cases
+                      # where there are two distinct modifications sites...eg.
+                      # XL:A-Alkene@230;XL:A-Alkene@235.
+                      AA.1=str_match_all(ms3CSM1$`Protein.Mods.ms3`, 
+                                          # "Xlink:DSSO_[[as]]_fragment@([[0-9]]+)")[2],
+                                          str_c("XL:A-", frag1, "@([[0-9|]]+)"))[[1]][,2],
+                      AA.2=str_match_all(ms3CSM2$`Protein.Mods.ms3`, 
+                                          # "Xlink:DSSO_[[as]]_fragment@([[0-9]]+)")[2]
+                                          str_c("XL:A-", frag2, "@([[0-9|]]+)"))[[1]][,2],
+                      XLink.AA.1=str_c(AA.1, sep="|"),
+                      XLink.AA.2=str_c(AA.2, sep="|")
+                      )
     return(flatCSM)
 }
 

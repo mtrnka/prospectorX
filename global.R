@@ -20,7 +20,7 @@ exDir <- c(wd= './DemoFiles')
 #exDir <- c(wd= '/var/lib/prospector/seqdb/web/results/msviewer/')
 #pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
 pathToXiFile <- "/var/www/crosslink-viewer/demo/data/"
-
+params.best <- c("Score.Diff", "percMatched", "massError", "z", "numPPSM", "numCSM", "xlinkClass")
 # For generating MS-Viewer Links Correctly
 queryTemplate <- "
 http://rodin05.ucsf.edu/prospector/cgi-bin/mssearch.cgi?

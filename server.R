@@ -19,17 +19,7 @@ function(input, output, session) {
                   step = 0.1, value = 0)
     }
   })
-  # output$svmThreshSliders <- renderUI({
-  #   tagList(
-  #     sliderInput("svmThresholdIntra", "IntraProtein", min = -5, max = 10, 
-  #                 step = 0.1, value = -5),
-  #     sliderInput("svmThresholdInter", "InterProtein", min = -5, max = 10, 
-  #                 step = 0.1, value = 0),
-  #     sliderInput("svmThreshold", "SVM Score", min = -5, max = 10, 
-  #                 step = 0.1, value = 0)
-  #   )
-  # })
-  
+
   shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "modules", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
@@ -625,6 +615,27 @@ function(input, output, session) {
       link <- str_c(baseLink, xiFileName, sep="?fileName=")
       tags$script(paste0("window.open('", link, "', '_blank')"))
     })
+  })
+  
+  observeEvent(input$scrapeMSP, {
+    req(csmTab())
+    require(rvest)
+    msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
+    msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
+    msvFiles <- str_replace(msvFiles, "\\/$", "")
+    ms.product.info <- csmTab() %>%
+      pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum, 
+                    "Tab delimited text"), generateMSViewerLink) %>%
+      map(function(msvLink) {
+        spec.html <- read_html(msvLink)
+        spec.node <- html_node(spec.html, xpath = '//*[@id="centerbody"]')
+        spec.table <- read_tsv(html_text(spec.node))
+        return(spec.table)
+      })
+    percentMatched <- getPercentMatched(ms.product.info)
+    csmTab() <- rbind(csmTab(), percentMatched)
+    csmTab() <- buildClassifierExperimental(csmTab(), params.best, "SVM.score")
+    csmTab() <- csmTab %>% mutate(dvals = SVM.score)
   })
   
 }
