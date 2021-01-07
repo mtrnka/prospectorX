@@ -623,17 +623,22 @@ function(input, output, session) {
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
     msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
     msvFiles <- str_replace(msvFiles, "\\/$", "")
-    ms.product.info <- csmTab() %>%
-      pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum, 
-                    "Tab delimited text"), generateMSViewerLink) %>%
-      map(function(msvLink) {
-        spec.html <- read_html(msvLink)
-        spec.node <- html_node(spec.html, xpath = '//*[@id="centerbody"]')
-        spec.table <- read_tsv(html_text(spec.node))
-        return(spec.table)
-      })
-    percentMatched <- getPercentMatched(ms.product.info)
-    csmTab() <- rbind(csmTab(), percentMatched)
+#    ms.product.info <- readMSProductInfo(csmTab())
+    withProgress(message = "scraping MS-Product", value = 0, {
+      numPoints <- nrow(csmTab())
+      ms.product.info <- csmTab() %>%
+        pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum,
+                      "Tab delimited text"), generateMSViewerLink) %>%
+        map(function(msvLink) {
+          spec.html <- read_html(msvLink)
+          spec.node <- html_node(spec.html, xpath = '//*[@id="centerbody"]')
+          spec.table <- read_tsv(html_text(spec.node))
+          incProgress(1/numPoints)
+          return(spec.table)
+        })
+    })
+#    percentMatched <- getPercentMatched(ms.product.info)
+    csmTab() <- cbind(csmTab(), percentMatched)
     csmTab() <- buildClassifierExperimental(csmTab(), params.best, "SVM.score")
     csmTab() <- csmTab %>% mutate(dvals = SVM.score)
   })

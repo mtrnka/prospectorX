@@ -100,7 +100,7 @@ fluidPage(
                                 actionButton("viewXiNet", label = "View in xiNet"),
                                 uiOutput("ui_open_tab"),
                                 br(),br(),
-                                actionButton("ScrapeMSP", label = "Scrape MS Product")
+                                actionButton("scrapeMSP", label = "Scrape MS Product")
                          )
                      ),
                      tags$hr(),
