@@ -814,7 +814,7 @@ formatXLTable <- function(datTab) {
     datTab <- datTab[order(datTab$dvals, decreasing = T),]
     datTab <- datTab %>% select(any_of(c("selected", "link", "link.1", "link.2", "xlinkedResPair",
                                          "xlinkedProtPair", "xlinkedModulPair",
-                                "dvals", "distance", "m.z", "z", "ppm",
+                                "dvals", "SVM.new", "distance", "m.z", "z", "ppm",
                                 "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
                                 "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
                                 "XLink.AA.1", "Protein.1", "Modul.1", "Species.1",

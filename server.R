@@ -618,15 +618,16 @@ function(input, output, session) {
   })
   
   observeEvent(input$scrapeMSP, {
-    req(csmTab())
+    req(scResults())
+    datTab <- scResults()
     require(rvest)
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
     msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
     msvFiles <- str_replace(msvFiles, "\\/$", "")
 #    ms.product.info <- readMSProductInfo(csmTab())
     withProgress(message = "scraping MS-Product", value = 0, {
-      numPoints <- nrow(csmTab())
-      ms.product.info <- csmTab() %>%
+      numPoints <- nrow(datTab)
+      ms.product.info <- datTab %>%
         pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum,
                       "Tab delimited text"), generateMSViewerLink) %>%
         map(function(msvLink) {
@@ -638,9 +639,9 @@ function(input, output, session) {
         })
     })
 #    percentMatched <- getPercentMatched(ms.product.info)
-    csmTab() <- cbind(csmTab(), percentMatched)
-    csmTab() <- buildClassifierExperimental(csmTab(), params.best, "SVM.score")
-    csmTab() <- csmTab %>% mutate(dvals = SVM.score)
+    datTab <- cbind(datTab, percentMatched)
+    datTab <- buildClassifierExperimental(datTab, params.best, "SVM.new")
+    scResults(datTab)
   })
   
 }
