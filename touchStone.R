@@ -677,7 +677,9 @@ generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectr
     templateVals["sequence"] <- peptide.1
     templateVals["sequence2"] <- peptide.2
     templateVals["link_search_type"] <- linkType
+    templateNames <- names(templateVals)
     templateVals <- url_encode(templateVals)
+    names(templateVals) <- templateNames
     zipped <- str_c(names(templateVals), templateVals, sep="=", collapse="&")
     if (outputType == "HTML") {
         return(str_c('<a href=\"', zipped, '\" target=\"_blank\">Spectrum</a>'))
