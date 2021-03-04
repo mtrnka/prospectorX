@@ -623,21 +623,21 @@ function(input, output, session) {
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
     msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
     msvFiles <- str_replace(msvFiles, "\\/$", "")
-#    ms.product.info <- readMSProductInfo(csmTab())
+    #    ms.product.info <- readMSProductInfo(csmTab())
     withProgress(message = "scraping MS-Product", value = 0, {
       numPoints <- nrow(datTab)
-      ms.product.info <- datTab %>%
-        pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum,
+      ms.product.info <-
+        pmap_chr(list(msvFiles, datTab$Fraction, datTab$RT, datTab$z, datTab$Peptide.1, datTab$Peptide.2, datTab$Spectrum,
                       "Tab delimited text"), generateMSViewerLink) %>%
         map(function(msvLink) {
-          spec.html <- read_html(msvLink)
+          spec.html <- xml2::read_html(msvLink)
           spec.node <- rvest::html_node(spec.html, xpath = '//*[@id="centerbody"]')
           spec.table <- read_tsv(rvest::html_text(spec.node))
           incProgress(1/numPoints)
           return(spec.table)
         })
     })
-#    percentMatched <- getPercentMatched(ms.product.info)
+    percentMatched <- getPercentMatched(ms.product.info)
     datTab <- cbind(datTab, percentMatched)
     datTab <- buildClassifierExperimental(datTab, params.best, "SVM.new")
     scResults(datTab)
