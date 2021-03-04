@@ -16,8 +16,8 @@ mmin <- function(x, base=5) {
 }
 
 # Path to MS-Viewer Data
-exDir <- c(wd= './DemoFiles')
-#exDir <- c(wd= '/var/lib/prospector/seqdb/web/results/msviewer/')
+#exDir <- c(wd= './DemoFiles')
+exDir <- c(wd= '/var/lib/prospector/seqdb/pipeline/projects')
 #pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
 pathToXiFile <- "/var/www/crosslink-viewer/demo/data/"
 params.best <- c("Score.Diff", "percMatched", "massError", "z", "numPPSM", "numCSM", "xlinkClass")

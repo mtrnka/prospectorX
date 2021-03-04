@@ -165,7 +165,7 @@ function(input, output, session) {
         )
     } else {
       datTab <- datTab %>%
-        mutate(link = pmap_chr(list(msvFiles, Fraction, RT, z, Peptide.1, Peptide.2, Spectrum), generateMSViewerLink))
+        mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2, MSMS.Info), generateMSViewerLink))
     }
     datTab <- generateCheckBoxes(datTab)
     minPPM = mmin(min(datTab$ppm, na.rm=T))
