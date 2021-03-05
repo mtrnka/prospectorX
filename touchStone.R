@@ -655,18 +655,21 @@ buildClassifierMS3 <- function(datTab) {
     return(datTab)
 }
 
-generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectrum, outputType = "HTML") {
+generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectrum, 
+                                 instrumentType = NA, outputType = "HTML") {
     if(!str_detect(fraction, "\\.[[a-z]]+$")) {
         fraction <- paste0(fraction, ".mgf")
     }
-    instrumentType <- switch(
-#        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
-        str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
-        "ESI-Q-high-res",
-        ethcd = "ESI-EThcD-high-res",
-        etd = "ESI-ETD-high-res",
-        hcd = "ESI-Q-high-res" #Add other instrument types
-    )
+    if (is.na(instrumentType)) {
+        instrumentType <- switch(
+            #        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
+            str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
+            "ESI-Q-high-res",
+            ethcd = "ESI-EThcD-high-res",
+            etd = "ESI-ETD-high-res",
+            hcd = "ESI-Q-high-res" #Add other instrument types
+        )
+    }
     linkType <- str_extract(peptide.1, "(?<=\\(\\+).+?(?=\\)([[A-Z]]|$|-))")
     templateVals["output_type"] <- outputType
     templateVals["data_filename"] <- file.path(path, fraction)

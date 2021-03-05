@@ -5,6 +5,7 @@ library(tidyverse)
 library(DT)
 library(urltools)
 library(e1071)
+library(xml2)
 source("./touchStone.R")
 
 mmax <- function(x, base=5) {
@@ -13,6 +14,11 @@ mmax <- function(x, base=5) {
 
 mmin <- function(x, base=5) {
    base * floor(x/base)
+}
+
+readParamsFile <- function(paramsFile) {
+   tryCatch(read_xml(paramsFile),
+            error = return(NA))
 }
 
 # Path to MS-Viewer Data

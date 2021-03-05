@@ -156,8 +156,14 @@ function(input, output, session) {
     datTab <- scResults()
     # The links should be generated in touchStone upon reading the SC file:
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
-    msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
+    msvFiles <- list.dirs(dirname(msvFilePath), recursive = F)
+    # msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
     msvFiles <- str_replace(msvFiles, "\\/$", "")
+    btName <- dirname(dirname(msvFilePath))
+    btParams <- readParamsFile(dir(dirname(btName), str_c(basename(btName), ".xml")))
+    instrumentType <- btParams %>% 
+      xml_find_all("instrument_name") %>% 
+      xml_text()
     if (input$experimentType == "ms3") {
       datTab <- datTab %>%
         mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
@@ -165,7 +171,8 @@ function(input, output, session) {
         )
     } else {
       datTab <- datTab %>%
-        mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2, MSMS.Info), generateMSViewerLink))
+        mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2, 
+                                    MSMS.Info, instrumentType), generateMSViewerLink))
     }
     datTab <- generateCheckBoxes(datTab)
     minPPM = mmin(min(datTab$ppm, na.rm=T))
