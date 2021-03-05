@@ -160,7 +160,9 @@ function(input, output, session) {
     # msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
     msvFiles <- str_replace(msvFiles, "\\/$", "")
     btName <- dirname(dirname(msvFilePath))
-    btParams <- readParamsFile(dir(dirname(btName), str_c(basename(btName), ".xml")))
+    btNameDir <- dirname(btName)
+    btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))
+    btParams <- readParamsFile(file.path(btNameDir, btParamFile))
     instrumentType <- btParams %>% 
       xml_find_all("instrument_name") %>% 
       xml_text()
