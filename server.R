@@ -163,9 +163,13 @@ function(input, output, session) {
     btNameDir <- dirname(btName)
     btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))
     btParams <- readParamsFile(file.path(btNameDir, btParamFile))
-    instrumentType <- btParams %>% 
-      xml_find_all("instrument_name") %>% 
-      xml_text()
+    if (!is.na(btParams)) {
+      instrumentType <- btParams %>% 
+        xml_find_all("instrument_name") %>% 
+        xml_text()
+    } else {
+      instrumentType <- NA
+    }
     if (input$experimentType == "ms3") {
       datTab <- datTab %>%
         mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
