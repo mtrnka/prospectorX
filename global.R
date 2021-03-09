@@ -16,9 +16,14 @@ mmin <- function(x, base=5) {
    base * floor(x/base)
 }
 
+#Left with Erro in this function 210305
 readParamsFile <- function(paramsFile) {
    tryCatch(read_xml(paramsFile),
-            error = return(NA))
+            error = function(e) {
+               message(e)
+               NA
+            }
+   )
 }
 
 # Path to MS-Viewer Data

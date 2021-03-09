@@ -158,7 +158,7 @@ function(input, output, session) {
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
     msvFiles <- list.dirs(dirname(msvFilePath), recursive = F)
     # msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
-    msvFiles <- str_replace(msvFiles, "\\/$", "")
+    # msvFiles <- str_replace(msvFiles, "\\/$", "")
     btName <- dirname(dirname(msvFilePath))
     btNameDir <- dirname(btName)
     btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))
