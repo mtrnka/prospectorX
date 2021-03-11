@@ -16,15 +16,12 @@ mmin <- function(x, base=5) {
    base * floor(x/base)
 }
 
+#Left with Erro in this function 210305
 readParamsFile <- function(paramsFile) {
    tryCatch(read_xml(paramsFile),
             error = function(e) {
-               message("File Read Error in readParamsFile")
-               return(NA)
-            },
-            warning = function(w) {
-               message("File Read Warning in readParamsFile")
-               return(NA)
+               message(e)
+               NA
             }
    )
 }
