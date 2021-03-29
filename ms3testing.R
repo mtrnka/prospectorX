@@ -9,7 +9,11 @@ ms2files2 <- c("DemoFiles/dssoMS3/rRiboDSSOms3/Z20200519-31_FTMSms2cid.txt",
               "DemoFiles/dssoMS3/rRiboDSSOms3/Z20200519-39_FTMSms2cid.txt",
               "DemoFiles/dssoMS3/rRiboDSSOms3/Z20200519-49_FTMSms2cid.txt",
               "DemoFiles/dssoMS3/rRiboDSSOms3/Z20200519-59_FTMSms2cid.txt")
-demo <- processMS3xlinkResultsMultiFile(scResults2, ms3files2, ms2files2)
+msFile <- createMasterScanFile(ms3files2, ms2files2)
+searchCompareMS3 <- readMS3results(scResults2)
+searchCompareMS3 <- addMasterScanInfo(searchCompareMS3, msFile)
+demo <- processMS3xlinkResults(searchCompareMS3)
+#demo <- processMS3xlinkResultsMultiFile(scResults2, ms3files2, ms2files2)
 
 searchCompareMS3 <- readMS3results(scResults2)
 searchCompareMS3 <- searchCompareMS3 %>% group_by(Fraction.ms3) %>% nest()
@@ -486,4 +490,5 @@ test %>% filter(!mmod) %>%
    group_by(incor) %>% summarize(mean=mean(Da.error, na.rm=T))
 
 test %>% filter(!mmod) %>% View
+
 

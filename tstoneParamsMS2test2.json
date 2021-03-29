@@ -1,0 +1,29 @@
+{
+	"parameters": {
+	   "searchCompare_results": {
+	      "scResults_1": {
+	         "scFile_name": "DemoFiles/medPic/name.txt",
+	         "module_file": "DemoFiles/medPic/newModule.txt",
+	         "pdb_directory": "DemoFiles/pdbFiles",
+	         "instrument_type": "ESI-HCD-high-res",
+	         "filtered_peaklist_dir": "resultsDir2",
+	         "project_file": "projfile2",
+	         "bt_params": "btParams2",
+	         "sc_params": "scParams2",
+	         "ms_level": "MS2",
+	         "decoy_scale_factor": 10,
+	         "summarization_level": "CSMs",
+	         "target_fdr": 1.0,
+	         "separate_fdrs": true,
+	         "min_svm_score": 0,
+	         "min_score_diff": 5,
+	         "prec_mass_error_min": -10,
+	         "prec_mass_error_max": 10
+	      }
+	   },
+	   "global_paramters": {
+	      "pep_length_min": 4,
+	      "pep_length_max": 35
+	   }
+	}
+}

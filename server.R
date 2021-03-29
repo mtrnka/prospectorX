@@ -118,7 +118,7 @@ function(input, output, session) {
   })
   
   scResults <- reactiveVal()
-  observe({scResults(scReader())}) 
+  observe({scResults(scReader())})
   
   moduleFile <- reactive({
     if (!is.integer(input$modules)) {

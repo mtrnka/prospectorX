@@ -1,0 +1,39 @@
+{
+	"parameters": {
+	   "searchCompare_results": {
+	      "scResults_1": {
+	         "scFile_name": "DemoFiles/dssoMS3/MS3_DSSO_2.txt",
+	         "module_file": "DemoFiles/modules.txt",
+	         "chain_file": "chain.txt",
+	         "instrument_type": "ESI-ION-TRAP-low-res",
+	         "filtered_peaklist_dir": "resultsDir2",
+	         "project_file": "projfile2",
+	         "bt_params": "btParams2",
+	         "sc_params": "scParams2",
+	         "ms_level": "MS3",
+	         "experiment_scan_info": {
+	            "master_scan_file": null,
+	            "peaklist_dir": "DemoFiles/dssoMS3/rRiboDSSOms3",
+	            "peaklists": {
+	               "Z20200519-31_FTMSms2cid.txt": "Z20200519-31_ITMSms3cid.txt",
+	               "Z20200519-39_FTMSms2cid.txt": "Z20200519-39_ITMSms3cid.txt",
+	               "Z20200519-49_FTMSms2cid.txt": "Z20200519-49_ITMSms3cid.txt",
+	               "Z20200519-59_FTMSms2cid.txt": "Z20200519-59_ITMSms3cid.txt"
+	            }
+	         },
+	         "decoy_scale_factor": 10,
+	         "summarization_level": "CSMs",
+	         "target_fdr": 1.0,
+	         "separate_fdrs": false,
+	         "min_svm_score": 0,
+	         "min_score_diff": 5,
+	         "prec_mass_error_min": -10,
+	         "prec_mass_error_max": 10
+	      }
+	   },
+	   "global_paramters": {
+	      "pep_length_min": 4,
+	      "pep_length_max": 35
+	   }
+	}
+}

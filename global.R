@@ -6,6 +6,8 @@ library(DT)
 library(urltools)
 library(e1071)
 library(xml2)
+library(jsonlite)
+library(bio3d)
 source("./touchStone.R")
 
 mmax <- function(x, base=5) {
@@ -16,15 +18,19 @@ mmin <- function(x, base=5) {
    base * floor(x/base)
 }
 
-#Left with Erro in this function 210305
 readParamsFile <- function(paramsFile) {
    tryCatch(read_xml(paramsFile),
             error = function(e) {
                message(e)
-               NA
+               return(NA)
             }
    )
 }
+
+defaultParams <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
+proton <- 1.007276
+H2O <- 18.01002
+
 
 # Path to MS-Viewer Data
 #exDir <- c(wd= './DemoFiles')
