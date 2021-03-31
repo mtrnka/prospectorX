@@ -22,8 +22,6 @@ function(input, output, session) {
 
   shinyFileChoose(input, "clmsData", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "modules", roots=exDir, filetypes=c('', 'txt'))
-  shinyFileChoose(input, "pdbID", roots=exDir, filetypes=c('', 'txt', 'pdb', 'cif'))
-  shinyFileChoose(input, "chainmap", roots=exDir, filetypes=c('', 'txt'))
   shinyFileChoose(input, "ms2pkls", roots=exDir, filetypes=c('', 'txt', 'mgf'))
   shinyFileChoose(input, "ms3pkls", roots=exDir, filetypes=c('', 'txt', 'mgf'))
 
@@ -50,24 +48,6 @@ function(input, output, session) {
     } else {
       cat(parseFilePaths(exDir, input$modules)$name)
       consoleMessage("*** Parsing Module File ***")
-    }
-  })
-  
-  output$pdbFileName <- renderPrint({
-    if (is.integer(input$pdbID)) {
-      cat("No file selected")
-    } else {
-      cat(parseFilePaths(exDir, input$pdbID)$name)
-      consoleMessage("*** Reading Protein Structure File ***")
-    }
-  })
-  
-  output$chainmapFileName <- renderPrint({
-    if (is.integer(input$chainmap)) {
-      cat("No file selected")
-    } else {
-      cat(parseFilePaths(exDir, input$chainmap)$name)
-      consoleMessage("*** Reading Chainmap File ***")
     }
   })
   
@@ -101,7 +81,7 @@ function(input, output, session) {
         scTable <- processMS3xlinkResultsMultiFile(
           inFile$datapath, ms3Files, ms2Files
         )
-        scTable <- scTable %>% mutate(dvals = Score.Diff / 10)
+        scTable <- scTable %>% mutate(SVM.score = Score.Diff / 10)
         consoleMessage("*** Loading Search Compare File ***")
         return(scTable)
         }
@@ -127,28 +107,9 @@ function(input, output, session) {
     }
   })
   
-  pdbFile <- reactive({
-    if (!is.integer(input$pdbID)) {
-      inFile <- parseFilePaths(exDir, input$pdbID)
-      return(inFile$datapath)
-    }
-  })
-  
-  chainmapFile <- reactive({
-    if (!is.integer(input$chainmap)) {
-      inFile <- parseFilePaths(exDir, input$chainmap)
-      return(inFile$datapath)
-    }
-  })
-
   observeEvent(req(moduleFile()), {
     consoleMessage("*** Assigning Modules ***")
-    scResults(assignModules(scResults(), moduleFile()))
-  })
-
-  observeEvent(req(chainmapFile(), pdbFile()), {
-    consoleMessage("***calculating distances on PDB***")
-    scResults(measureDistances(scResults(), parsePDB(pdbFile()), readChainMap(chainmapFile())))
+    scResults(processModuleFile(scResults(), moduleFile(), pdbFileDir = "DemoFiles/pdbFiles/"))
   })
 
   csmTab <- reactive({
@@ -162,10 +123,14 @@ function(input, output, session) {
     btName <- dirname(dirname(msvFilePath))
     btNameDir <- dirname(btName)
     btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))
+    if (length(btParamFile) > 0) {
     btParams <- readParamsFile(file.path(btNameDir, btParamFile))
+    } else {
+      btParams <- NA
+    }
     if (!is.na(btParams)) {
-      instrumentType <- btParams %>% 
-        xml_find_all("instrument_name") %>% 
+      instrumentType <- btParams %>%
+        xml_find_all("instrument_name") %>%
         xml_text()
     } else {
       instrumentType <- NA
@@ -177,16 +142,16 @@ function(input, output, session) {
         )
     } else {
       datTab <- datTab %>%
-        mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2, 
+        mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
                                     MSMS.Info, instrumentType), generateMSViewerLink))
     }
-    datTab <- generateCheckBoxes(datTab)
+#    datTab <- generateCheckBoxes(datTab)
     minPPM = mmin(min(datTab$ppm, na.rm=T))
     maxPPM = mmax(max(datTab$ppm, na.rm=T))
     updateSliderInput(session, "ms1MassError", value = c(minPPM, maxPPM),
                       min = minPPM, max = maxPPM)
-    minSVM = mmin(min(datTab$dvals, na.rm=T), 1)
-    maxSVM = mmax(max(datTab$dvals, na.rm=T), 1)
+    minSVM = mmin(min(datTab$SVM.score, na.rm=T), 1)
+    maxSVM = mmax(max(datTab$SVM.score, na.rm=T), 1)
     if (input$separateFDRs) {
       updateSliderInput(session, "svmThresholdInter", value = 0,
                        min = minSVM, max = maxSVM)
@@ -239,12 +204,12 @@ function(input, output, session) {
       req(input$svmThresholdIntra, input$svmThresholdInter)
       tabLevelFiltered() %>% 
         filter(Decoy=="Target",
-               (str_detect(xlinkClass, "intraProtein") & dvals >= input$svmThresholdIntra) |
-                 (str_detect(xlinkClass, "interProtein") & dvals >= input$svmThresholdInter))
+               (str_detect(xlinkClass, "intraProtein") & SVM.score >= input$svmThresholdIntra) |
+                 (str_detect(xlinkClass, "interProtein") & SVM.score >= input$svmThresholdInter))
     } else {
       req(input$svmThreshold)
       tabLevelFiltered() %>% 
-        filter(Decoy=="Target", dvals >= input$svmThreshold)
+        filter(Decoy=="Target", SVM.score >= input$svmThreshold)
     }
   })
   
@@ -254,12 +219,12 @@ function(input, output, session) {
       req(input$svmThresholdIntra, input$svmThresholdInter)
       tabLevelFiltered() %>% 
         filter(Decoy!="Target",
-               (str_detect(xlinkClass, "intraProtein") & dvals >= input$svmThresholdIntra) |
-                 (str_detect(xlinkClass, "interProtein") & dvals >= input$svmThresholdInter))
+               (str_detect(xlinkClass, "intraProtein") & SVM.score >= input$svmThresholdIntra) |
+                 (str_detect(xlinkClass, "interProtein") & SVM.score >= input$svmThresholdInter))
     } else {
       req(input$svmThreshold)
       tabLevelFiltered() %>% 
-        filter(Decoy!="Target", dvals >= input$svmThreshold)
+        filter(Decoy!="Target", SVM.score >= input$svmThreshold)
     }
   })
   
@@ -283,8 +248,8 @@ function(input, output, session) {
                                                  "Protein.2",
                                                  "Peptide.1",
                                                  "Peptide.2",
-                                                 "Modul.1",
-                                                 "Modul.2",
+                                                 "Module.1",
+                                                 "Module.2",
                                                  "Fraction"))
     DT::datatable(displayTable,
                   options = list(autoWidth=TRUE,
@@ -315,8 +280,8 @@ function(input, output, session) {
                                                  "Protein.2",
                                                  "Peptide.1",
                                                  "Peptide.2",
-                                                 "Modul.1",
-                                                 "Modul.2",
+                                                 "Module.1",
+                                                 "Module.2",
                                                  "Fraction"))
     DT::datatable(displayTable,
                   options = list(autoWidth=TRUE,
@@ -347,8 +312,8 @@ function(input, output, session) {
                                                  "Protein.2",
                                                  "Peptide.1",
                                                  "Peptide.2",
-                                                 "Modul.1",
-                                                 "Modul.2",
+                                                 "Module.1",
+                                                 "Module.2",
                                                  "Fraction"))
     DT::datatable(displayTable,
                   options = list(autoWidth=TRUE,
@@ -398,8 +363,8 @@ function(input, output, session) {
       par(mfrow=c(2, 1),
           mar=c(2.1, 4.1, 4.1, 2.1),
           oma=c(3.1, 0, 0, 0))
-      plotMin <- mmin(min(tabLevelFiltered()$dvals), 1)
-      plotMax <- mmax(max(tabLevelFiltered()$dvals), 1)
+      plotMin <- mmin(min(tabLevelFiltered()$SVM.score), 1)
+      plotMax <- mmax(max(tabLevelFiltered()$SVM.score), 1)
       fdrPlots(filter(tabLevelFiltered(), str_detect(xlinkClass, "intraProtein")), 
                scalingFactor = input$scalingFactor, cutoff=input$svmThresholdIntra,
                minValue = plotMin, maxValue = plotMax, title = "intraProtein FDR", 
@@ -453,38 +418,39 @@ function(input, output, session) {
     numHitsPlot(numHits(), fdr())
   })
   
-  randomDists <- reactive({
-    req(pdbFile())
-    consoleMessage("*** geting random Lys-Lys distances ***")
-    getRandomCrosslinks(parsePDB(pdbFile()), 5000)
-  })
+  # randomDists <- reactive({
+  #   req(moduleFile())
+  #   consoleMessage("*** geting random Lys-Lys distances ***")
+  #   #getRandomCrosslinks(parsePDB(pdbFile()), 5000)
+  # })
 
-  targetDists <- reactive({
-    req(tabLevel())
-    if (sum(is.na(tabLevel()$distance)) == nrow(tabLevel())) return(NULL)
-    xlTable() %>% 
-      filter(!is.na(distance)) %>%
-      pull(distance)
-  })
+  # targetDists <- reactive({
+  #   req(tabLevel())
+  #   if (sum(is.na(tabLevel()$distance)) == nrow(tabLevel())) return(NULL)
+  #   xlTable() %>% 
+  #     filter(!is.na(distance)) %>%
+  #     pull(distance)
+  # })
 
   classedMassErrors <- reactive({
     subset(xlTable())$ppm
   })
 
   VR <- reactive({
-    req(pdbFile())
-    sum(targetDists() > input$distanceThreshold) / length(targetDists())
+    req(moduleFile())
+    targetDists <- xlTable() %>% filter(!is.na(distance)) %>% pull(distance)
+    sum(targetDists > input$distanceThreshold) / length(targetDists)
   })
 
   output$VR <- renderText({
-    req(targetDists())
+    req(moduleFile)
     str_c("Violation Rate: ", as.character(round(100 * VR(), 2)), "%"
     )
   })
 
   output$distancePlot <- renderPlot({
-    req(pdbFile(), targetDists())
-    distancePlot(targetDists(), randomDists(), threshold = input$distanceThreshold)
+    req(moduleFile())
+    distancePlot2(tabLevel(), threshold = input$distanceThreshold)
   })
 
   output$massErrorPlot <- renderPlot({
@@ -502,7 +468,7 @@ function(input, output, session) {
   })
 
   output$distanceSlider <- renderUI({
-    req(pdbFile(), targetDists())
+    req(moduleFile())
     sliderInput("distanceThreshold", "Violation Dist.", min = 0, max = 100,
                 step = 1, value = 30) 
   })
@@ -551,8 +517,8 @@ function(input, output, session) {
                      as.character
         )
         xlTableSelected(
-          xlTable() %>% filter((Modul.1 == protFilter()[1] & Modul.2 == protFilter()[2]) |
-                                 (Modul.1 == protFilter()[2] & Modul.2 == protFilter()[1]))
+          xlTable() %>% filter((Module.1 == protFilter()[1] & Module.2 == protFilter()[2]) |
+                                 (Module.1 == protFilter()[2] & Module.2 == protFilter()[1]))
         )
       }
       updateTabsetPanel(session, "navbar", selected = "Selected Crosslinks")
@@ -577,7 +543,7 @@ function(input, output, session) {
   output$modulePlot <- renderPlot({
     req(summaryModulData)
     summaryModulData() %>% 
-      ggplot(aes(Modul.1, Modul.2, size=counts, col=counts)) + 
+      ggplot(aes(Module.1, Module.2, size=counts, col=counts)) + 
       geom_point(na.rm=T) +
       scale_size(range = c(-1, 12)) +
       scale_color_viridis_c(option="D") +

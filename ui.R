@@ -59,26 +59,6 @@ fluidPage(
                                 tags$style(type = 'text/css', '#moduleFileName {white-space:pre-wrap; padding:7px;}')
                          )
                      ),
-                     h4("PDB ID"),
-                     fluidRow(
-                         column(4, shinyFilesButton("pdbID", "Browse...",
-                                                    "Select the pdb/cif file",
-                                                    multiple = F, viewtype = "detail")
-                         ),
-                         column(8, verbatimTextOutput("pdbFileName"),
-                                tags$style(type = 'text/css', '#pdbFileName {white-space:pre-wrap; padding:7px;')
-                         )
-                     ),
-                     h4("Chainmap File"),
-                     fluidRow(
-                         column(4, shinyFilesButton("chainmap", "Browse...",
-                                                    "Select the chainmap file",
-                                                    multiple = F, viewtype = "detail")
-                         ),
-                         column(8, verbatimTextOutput("chainmapFileName"),
-                                tags$style(type = 'text/css', '#chainmapFileName {white-space:pre-wrap; padding:7px;}')
-                         )
-                     ),
                      tags$hr(),
                      selectInput("summaryLevel", label = h4("Summarization Level"),
                                  choices = list("CSMs",

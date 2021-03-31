@@ -106,9 +106,9 @@ euclideanHelper <- function(datTab, parsedPDB) {
     return(datTabDist)
 }
 
-getRandomCrosslinks <- function(parsedPDB, numCrosslinks,
-                                resType1="LYS", resType2="LYS",
-                                chains=NULL) {
+randomCrosslinks <- function(parsedPDB, numCrosslinks,
+                             resType1="LYS", resType2="LYS",
+                             chains=NULL) {
     if (!is.null(chains)) {
         parsedPDB <- parsedPDB %>% filter(chain %in% chains)
     }
@@ -126,12 +126,24 @@ getRandomCrosslinks <- function(parsedPDB, numCrosslinks,
     return(randomDists)
 }
 
+randomHelper <- function(datTab, parsedPDB, resType1="LYS", resType2="LYS", chains=NULL) {
+    if (!is.null(parsedPDB)) {
+        numCrosslinks <- nrow(datTab)
+        datTab$random.distance <- randomCrosslinks(parsedPDB, numCrosslinks,
+                                                   resType1, resType2, chains=NULL)
+    } else {
+        datTab$dandom.distance <- NA_real_
+    }
+    return(datTab)
+}
+
 measureCrosslinkDistance <- function(datTabMod, pdbList) {
     nestedDatTabMod <- datTabMod %>% 
         group_by(PDB) %>% 
         nest() %>% 
         mutate(parsedPDB = pdbList[PDB]) %>%
         mutate(data=map2(data, parsedPDB, euclideanHelper)) %>%
+        mutate(data=map2(data, parsedPDB, randomHelper)) %>%
         select(-parsedPDB) %>%
         unnest(col=c(data, PDB)) %>%
         ungroup() %>%
@@ -148,31 +160,39 @@ readModuleFile <- function(pathToModFile) {
                             PDB.chain = col_character(),
                             first.AA = col_integer(),
                             last.AA = col_integer()
-                            )
                         )
-    # If the first/last AA columns are missing from mod file, create them.
-    # get protein lengths from Uniprot... it might be more efficient, to force
-    # Prospector to output sequence length in search compare and use instead.
-    if (!"first.AA" %in% names(modFile)) {
-        modFile$first.AA <- 0L
-    }
-    if (!"last.AA" %in% names(modFile)) {
-        modFile$last.AA <- map_int(modFile$Acc, getUniprotSeqLength)
-    }
-    
-    # If some entries don't have first/last NA specified, eg... there is some
-    # domain of particular interest, but rest of the protein should default to some 
-    # other module, then first.AA needs to be NA.  Fill in last.AA to protein length
-    # for purpose of displaying XiNet visualizations correctly.
-    modFile <- modFile %>%
-        mutate(last.AA = map2_int(last.AA, Acc, function(last.AA, Acc) {
-            if(is.na(last.AA)) {
-                return(getUniprotSeqLength(Acc))
-            } else {
-                return(as.integer(last.AA))
+    )
+    if (sum(is.na(modFile$last.AA)) > 0) {
+        
+        # If the first/last AA columns are missing from mod file, create them.
+        # get protein lengths from Uniprot... it might be more efficient, to force
+        # Prospector to output sequence length in search compare and use instead.
+        if (!"first.AA" %in% names(modFile)) {
+            modFile$first.AA <- 0L
+        }
+        if (!"last.AA" %in% names(modFile)) {
+            modFile$last.AA <- map_int(modFile$Acc, getUniprotSeqLength)
+        }
+        
+        # If some entries don't have first/last NA specified, eg... there is some
+        # domain of particular interest, but rest of the protein should default to some 
+        # other module, then first.AA needs to be NA.  Fill in last.AA to protein length
+        # for purpose of displaying XiNet visualizations correctly.
+        modFile <- modFile %>%
+            mutate(last.AA = map2_int(last.AA, Acc, function(last.AA, Acc) {
+                if(is.na(last.AA)) {
+                    return(getUniprotSeqLength(Acc))
+                } else {
+                    return(as.integer(last.AA))
+                }
+            }))
+        tryCatch(write_tsv(modFile, pathToModFile),
+            error = function(e) {
+                message(str_c("Could not write module file: ", e))
+                return(modFile)
             }
-        }))
-#    write_tsv(modFile, pathToModFile)
+        )
+    }
     return(modFile)
 }
 
@@ -190,33 +210,29 @@ getUniprotSeqLength <- function(uniprotAcc) {
 
 assignModules <- function(searchTable, moduleFile) {
     mods <- unique(moduleFile$Module) %>% str_sort
+    accs <- levels(searchTable$Acc.1)
     datTab <- searchTable %>% 
         left_join(moduleFile, by=c("Acc.1"="Acc")) %>%
         mutate("keepEntry" = pmap_lgl(select(., XLink.AA.1, first.AA, last.AA),
                                       function(XLink.AA.1, first.AA, last.AA) 
-                                          between(XLink.AA.1, first.AA, last.AA))
+                                          dplyr::between(XLink.AA.1, first.AA, last.AA))
         ) %>% 
         filter(keepEntry | is.na(keepEntry)) %>%
         group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
         add_count(name="redundance") %>%
-        nest() %>%
-        mutate(data = map(data, ~ filter(., redundance == 1 | (redundance > 1 & keepEntry)))) %>%
-        unnest(cols = c(data)) %>%
+        filter(redundance == 1 | (redundance > 1 & keepEntry)) %>%
         ungroup() %>%
         select(-first.AA, -last.AA, -keepEntry, -Protein.name, -redundance) %>%
         left_join(moduleFile, by=c("Acc.2"="Acc"), suffix=c(".1", ".2")) %>%
         mutate("keepEntry" = pmap_lgl(select(., XLink.AA.2, first.AA, last.AA),
                                       function(XLink.AA.2, first.AA, last.AA) 
-                                          between(XLink.AA.2, first.AA, last.AA))
+                                          dplyr::between(XLink.AA.2, first.AA, last.AA))
         ) %>% 
         filter(keepEntry | is.na(keepEntry)) %>%
         group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
         add_count(name="redundance") %>%
-        nest() %>%
-        mutate(data = map(data, ~ filter(., redundance == 1 | (redundance > 1 & keepEntry)))) %>%
-        unnest(cols = c(data)) %>%
+        filter(redundance == 1 | (redundance > 1 & keepEntry)) %>%
         ungroup() %>%
-        filter(keepEntry | is.na(keepEntry)) %>%
         select(-first.AA, -last.AA, -keepEntry, -Protein.name, -redundance) %>%
         mutate(xlinkedModulPair = ifelse(Module.1 <= Module.2,
                                          str_c(Module.1, Module.2, sep="::"),
@@ -224,7 +240,9 @@ assignModules <- function(searchTable, moduleFile) {
         ) %>% 
         mutate(xlinkedModulPair = as_factor(xlinkedModulPair),
                Module.1 = factor(Module.1, levels = mods),
-               Module.2 = factor(Module.2, levels = mods)) %>%
+               Module.2 = factor(Module.2, levels = mods),
+               Acc.1 = factor(Acc.1, levels = accs),
+               Acc.2 = factor(Acc.2, levels = accs)) %>%
         add_count(xlinkedModulPair, name="numMPSM")
     if (sum(str_detect(names(datTab), "PDB.code")) > 0) {
         datTab <- datTab %>%
@@ -235,49 +253,12 @@ assignModules <- function(searchTable, moduleFile) {
     return(datTab)
 }
 
-assignModulesFurrr <- function(searchTable, moduleFile) {
-    mods <- unique(moduleFile$Module) %>% str_sort
-    datTab <- searchTable %>% 
-        left_join(moduleFile, by=c("Acc.1"="Acc")) %>%
-        mutate("keepEntry" = pmap_lgl(select(., XLink.AA.1, first.AA, last.AA),
-                                      function(XLink.AA.1, first.AA, last.AA) 
-                                          between(XLink.AA.1, first.AA, last.AA))
-        ) %>% 
-        filter(keepEntry | is.na(keepEntry)) %>%
-        group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
-        add_count(name="redundance") %>%
-        nest() %>%
-        mutate(data = future_map(data, ~ filter(., redundance == 1 | (redundance > 1 & keepEntry)))) %>%
-        unnest(cols = c(data)) %>%
-        ungroup() %>%
-        select(-first.AA, -last.AA, -keepEntry, -Protein.name, -redundance) %>%
-        left_join(moduleFile, by=c("Acc.2"="Acc"), suffix=c(".1", ".2")) %>%
-        mutate("keepEntry" = pmap_lgl(select(., XLink.AA.2, first.AA, last.AA),
-                                      function(XLink.AA.2, first.AA, last.AA) 
-                                          between(XLink.AA.2, first.AA, last.AA))
-        ) %>% 
-        filter(keepEntry | is.na(keepEntry)) %>%
-        group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
-        add_count(name="redundance") %>%
-        nest() %>%
-        mutate(data = future_map(data, ~ filter(., redundance == 1 | (redundance > 1 & keepEntry)))) %>%
-        unnest(cols = c(data)) %>%
-        ungroup() %>%
-        filter(keepEntry | is.na(keepEntry)) %>%
-        select(-first.AA, -last.AA, -keepEntry, -Protein.name, -redundance) %>%
-        mutate(xlinkedModulPair = ifelse(Module.1 <= Module.2,
-                                         str_c(Module.1, Module.2, sep="::"),
-                                         str_c(Module.2, Module.1, sep="::"))
-        ) %>% 
-        mutate(xlinkedModulPair = as_factor(xlinkedModulPair),
-               Module.1 = factor(Module.1, levels = mods),
-               Module.2 = factor(Module.2, levels = mods)) %>%
-        add_count(xlinkedModulPair, name="numMPSM")
-    if (sum(str_detect(names(datTab), "PDB.code")) > 0) {
-        datTab <- datTab %>%
-            mutate(PDB = ifelse(!is.na(PDB.code.1) & !is.na(PDB.code.2) & PDB.code.1 == PDB.code.2,
-                                PDB.code.1, NA)
-            )
+processModuleFile <- function(datTab, pathToModFile, pdbFileDir = getwd()) {
+    modFile <- readModuleFile(pathToModFile)
+    datTab <- assignModules(datTab, modFile)
+    if ("PDB.code" %in% names(modFile) & sum(!is.na(modFile$PDB.chain) > 0)) {
+        pdbFiles <- gatherPDBs(modFile, pdbFileDir = pdbFileDir)
+        datTab <- measureCrosslinkDistance(datTab, pdbFiles)
     }
     return(datTab)
 }
@@ -1555,6 +1536,28 @@ distancePlot <- function(targetDists, randomDists, threshold) {
     abline(v=threshold, lwd=2, lt=1, col="red")
     legend("topright", c("experimental", "random distribution"), fill = c(col2, col1),
            bty="n")
+}
+
+distancePlot2 <- function(datTab, threshold=35, binWidth=2.5) {
+    # col1 <- rgb(141, 90, 151, alpha = 150, maxColorValue = 255)
+    # col2 <- rgb(184, 235, 208, alpha = 150, maxColorValue = 255)
+    p <- datTab %>% 
+        pivot_longer(cols = c(distance, random.distance), 
+                     names_to = "distType", 
+                     values_to = "distance") %>%
+        ggplot(aes(distance, fill=PDB)) + 
+        # geom_histogram(aes(random.distance), fill=col1,
+        #                binwidth = 2.5, 
+        #                col="black", position="stack") + 
+        geom_histogram(binwidth = binWidth, col="black", position="stack") +
+        geom_vline(xintercept = threshold, col="red", size=1.25) + 
+        facet_grid(rows = "distType") + 
+        scale_fill_brewer(palette=4, type="seq", labels=abbreviate) + 
+        theme_bw() +
+        theme(plot.title = element_text(face = "bold", size = 14)) +
+        ggtitle("Protein Pairs")
+    
+    print(p)
 }
 
 numHitsPlot <- function(num.hits, threshold=0) {

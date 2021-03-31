@@ -129,9 +129,6 @@ processMS3result <- function(paramsSCresult) {
    return(scTable)
 }
 
-
-
-
 tstone3 <- readTstoneParams("tstoneParamsMS3test.json")
 testMS3 <- tstone3$searchCompare_results$scResults_1
 testMS3$experiment_scan_info$master_scan_file <- "paramsSCresultscanFile.txt"
@@ -142,33 +139,13 @@ testMS2 <- tstone2$searchCompare_results$scResults_1
 demo2 <- processXLresult(testMS2)
 
 newMod <- readModuleFile(testMS2$module_file)
-pdbFiles <- gatherPDBs(newMod, pdbFileDir = testMS2$pdb_directory)
+#pdbFiles <- gatherPDBs(newMod, pdbFileDir = testMS2$pdb_directory)
 
-demo3 <- measureCrosslinkDistance(demo2, pdbFiles)
-demo3 %>% filter(SVM.score > 0) %>%
+#demo3 <- measureCrosslinkDistance(demo2, pdbFiles)
+demo2 %>% filter(SVM.score > 0) %>%
    ggplot(aes(distance, fill=PDB)) + 
    geom_histogram(binwidth = 2.5, col="black", position="stack") +
    geom_vline(xintercept = 35) + 
    scale_fill_brewer(palette=4, type="seq") + 
    theme_bw()
 
-test <- demo2 %>% arrange(desc(SVM.score)) %>% slice(1:1000)
-library(tictoc)
-library(future)
-library(furrr)
-
-future::plan(multicore)
-
-tic() # start timer
-map_dbl(1:100, function(x){
-   Sys.sleep(0.1)
-   x^2
-})
-toc()
-
-tic() # start timer
-future_map_dbl(1:100, function(x){
-   Sys.sleep(0.1)
-   x^2
-})
-toc()

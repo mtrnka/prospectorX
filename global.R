@@ -7,7 +7,7 @@ library(urltools)
 library(e1071)
 library(xml2)
 library(jsonlite)
-library(bio3d)
+#library(bio3d)
 source("./touchStone.R")
 
 mmax <- function(x, base=5) {
@@ -34,18 +34,19 @@ H2O <- 18.01002
 
 # Path to MS-Viewer Data
 #exDir <- c(wd= './DemoFiles')
-exDir <- c(wd= '/var/lib/prospector/seqdb/pipeline/projects')
+exDir <- c(wd= '/mnt/pipeline/projects')
 #pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
-pathToXiFile <- "/var/www/crosslink-viewer/demo/data/"
+pathToXiFile <- "/var/www/html/crosslink-viewer/demo/data"
 params.best <- c("Score.Diff", "percMatched", "massError", "z", "numPPSM", "numCSM", "xlinkClass")
+
 # For generating MS-Viewer Links Correctly
 queryTemplate <- "
-http://rodin05.ucsf.edu/prospector/cgi-bin/mssearch.cgi?
+http://lanhuang2.physiology.uci.edu/prospector/cgi-bin/mssearch.cgi?
 search_name=msproduct&
 output_type=HTML&
 report_title=MS-Product&version=6.2.29&
 data_source=Data%20From%20File&
-data_filename=%2Fvar%2Flib%2Fprospector%2Fseqdb%2Fweb%2Fresults%2Fmsviewer%2F6%2Fk%2F6k6yrj8tuo%2FZ20200703_ethcd%2FZ20200703-05_FTMSms2ethcd.mgf&
+data_filename=%2Fmnt%2Fpipeline%2Fprojects%2FDSSOstar_rRibo%2Fsc%2FrRibo_DSSO_star_HCD%2FtstoneMS2.1%2FDSSOstar_rRibo%2FZ20200519-63_FTMSms2hcd.mgf&
 use_instrument_ion_types=1&
 msms_min_precursor_mass=0&
 instrument_name=ESI-EThcD-high-res&display_graph=1&
