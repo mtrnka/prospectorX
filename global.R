@@ -31,7 +31,6 @@ defaultParams <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
 proton <- 1.007276
 H2O <- 18.01002
 
-
 # Path to MS-Viewer Data
 #exDir <- c(wd= './DemoFiles')
 exDir <- c(wd= '/mnt/pipeline/projects')

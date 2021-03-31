@@ -109,7 +109,10 @@ function(input, output, session) {
   
   observeEvent(req(moduleFile()), {
     consoleMessage("*** Assigning Modules ***")
-    scResults(processModuleFile(scResults(), moduleFile(), pdbFileDir = "DemoFiles/pdbFiles/"))
+    msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
+    projFolder <- dirname(dirname(dirname(dirname(msvFilePath))))
+    pdbFolder <- file.path(projFolder, "tstone", "pdb")
+    scResults(processModuleFile(scResults(), moduleFile(), pdbFileDir = pdbFolder))
   })
 
   csmTab <- reactive({
@@ -118,8 +121,6 @@ function(input, output, session) {
     # The links should be generated in touchStone upon reading the SC file:
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
     msvFiles <- list.dirs(dirname(msvFilePath), recursive = F)
-    # msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
-    # msvFiles <- str_replace(msvFiles, "\\/$", "")
     btName <- dirname(dirname(msvFilePath))
     btNameDir <- dirname(btName)
     btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))

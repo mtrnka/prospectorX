@@ -16,6 +16,10 @@ readProspectorXLOutput <- function(inputFile){
         mw_pos <- str_which(header, "Protein.MW")
         header[mw_pos] <- c("MW.1", "MW.2")
     }
+    if ("Protein.Length" %in% header) {
+        len_pos <- str_which(header, "Protein.Length")
+        header[len_pos] <- c("Protein.len.1", "Protein.len.2")
+    }
     names(dataTable) <- header
     if (!"Spectrum" %in% names(dataTable)) {
         dataTable$Spectrum <- 1
@@ -132,7 +136,7 @@ randomHelper <- function(datTab, parsedPDB, resType1="LYS", resType2="LYS", chai
         datTab$random.distance <- randomCrosslinks(parsedPDB, numCrosslinks,
                                                    resType1, resType2, chains=NULL)
     } else {
-        datTab$dandom.distance <- NA_real_
+        datTab$random.distance <- NA_real_
     }
     return(datTab)
 }
