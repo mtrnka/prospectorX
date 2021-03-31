@@ -439,7 +439,9 @@ function(input, output, session) {
 
   VR <- reactive({
     req(moduleFile())
-    targetDists <- xlTable() %>% filter(!is.na(distance)) %>% pull(distance)
+    targetDists <- xlTable() %>% 
+      filter(!is.na(distance)) %>% 
+      pull(distance)
     sum(targetDists > input$distanceThreshold) / length(targetDists)
   })
 
@@ -451,7 +453,7 @@ function(input, output, session) {
 
   output$distancePlot <- renderPlot({
     req(moduleFile())
-    distancePlot2(tabLevel(), threshold = input$distanceThreshold)
+    distancePlot2(xlTable(), threshold = input$distanceThreshold)
   })
 
   output$massErrorPlot <- renderPlot({
@@ -563,7 +565,7 @@ function(input, output, session) {
     xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
     write_csv(xiFile, xiFilePath)
     output$ui_open_tab <- renderUI({
-      baseLink <- 'http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo2.html'
+      baseLink <- 'http://lanhuang2.physiology.uci.edu/crosslink-viewer/demo/Demo2.html'
       link <- str_c(baseLink, xiFileName, sep="?fileName=")
       tags$script(paste0("window.open('", link, "', '_blank')"))
     })

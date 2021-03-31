@@ -1542,9 +1542,13 @@ distancePlot <- function(targetDists, randomDists, threshold) {
            bty="n")
 }
 
-distancePlot2 <- function(datTab, threshold=35, binWidth=2.5) {
+distancePlot2 <- function(datTab, threshold=35, binWidth=NA) {
     # col1 <- rgb(141, 90, 151, alpha = 150, maxColorValue = 255)
     # col2 <- rgb(184, 235, 208, alpha = 150, maxColorValue = 255)
+    if (is.na(binWidth)) {
+        maxDist <- max(datTab$distance, datTab$random.distance)
+        binWidth <- mmax(maxDist / 50, 2.5)
+    }
     p <- datTab %>% 
         pivot_longer(cols = c(distance, random.distance), 
                      names_to = "distType", 
