@@ -5,6 +5,8 @@ function(input, output, session) {
   output$consoleOut <- renderText({
     consoleMessage()
   })
+  
+  pdbInfo <- reactiveVal(FALSE)
 
   output$svmThreshSliders <- renderUI({
     if (input$separateFDRs) {
@@ -113,6 +115,9 @@ function(input, output, session) {
     projFolder <- dirname(dirname(dirname(dirname(msvFilePath))))
     pdbFolder <- file.path(projFolder, "tstone", "pdb")
     scResults(processModuleFile(scResults(), moduleFile(), pdbFileDir = pdbFolder))
+    if ("PDB" %in% names(scResults()) & sum(!is.na(scResults()$PDB)) > 0) {
+      pdbInfo(TRUE)
+    }
   })
 
   csmTab <- reactive({
@@ -419,26 +424,12 @@ function(input, output, session) {
     numHitsPlot(numHits(), fdr())
   })
   
-  # randomDists <- reactive({
-  #   req(moduleFile())
-  #   consoleMessage("*** geting random Lys-Lys distances ***")
-  #   #getRandomCrosslinks(parsePDB(pdbFile()), 5000)
-  # })
-
-  # targetDists <- reactive({
-  #   req(tabLevel())
-  #   if (sum(is.na(tabLevel()$distance)) == nrow(tabLevel())) return(NULL)
-  #   xlTable() %>% 
-  #     filter(!is.na(distance)) %>%
-  #     pull(distance)
-  # })
-
   classedMassErrors <- reactive({
     subset(xlTable())$ppm
   })
 
   VR <- reactive({
-    req(moduleFile())
+    req(moduleFile(), pdbInfo())
     targetDists <- xlTable() %>% 
       filter(!is.na(distance)) %>% 
       pull(distance)
@@ -446,13 +437,13 @@ function(input, output, session) {
   })
 
   output$VR <- renderText({
-    req(moduleFile)
+    req(moduleFile, pdbInfo())
     str_c("Violation Rate: ", as.character(round(100 * VR(), 2)), "%"
     )
   })
 
   output$distancePlot <- renderPlot({
-    req(moduleFile())
+    req(moduleFile(), pdbInfo())
     distancePlot2(xlTable(), threshold = input$distanceThreshold)
   })
 
