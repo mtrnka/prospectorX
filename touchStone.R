@@ -212,10 +212,13 @@ getUniprotSeqLength <- function(uniprotAcc) {
     )
 }
 
-assignModules <- function(searchTable, moduleFile) {
+assignModules <- function(datTab, moduleFile) {
     mods <- unique(moduleFile$Module) %>% str_sort
-    accs <- levels(searchTable$Acc.1)
-    datTab <- searchTable %>% 
+    accs <- levels(datTab$Acc.1)
+    datTab <- datTab %>% group_by(Decoy2)
+    datTabList <- datTab %>% group_split()
+    names(datTabList) <- datTab %>% group_keys() %>% pull(Decoy2)
+    datTab.target <- datTabList$Target %>% 
         left_join(moduleFile, by=c("Acc.1"="Acc")) %>%
         mutate("keepEntry" = pmap_lgl(select(., XLink.AA.1, first.AA, last.AA),
                                       function(XLink.AA.1, first.AA, last.AA) 
@@ -248,12 +251,20 @@ assignModules <- function(searchTable, moduleFile) {
                Acc.1 = factor(Acc.1, levels = accs),
                Acc.2 = factor(Acc.2, levels = accs)) %>%
         add_count(xlinkedModulPair, name="numMPSM")
-    if (sum(str_detect(names(datTab), "PDB.code")) > 0) {
-        datTab <- datTab %>%
+    if (sum(str_detect(names(datTab.target), "PDB.code")) > 0) {
+        datTab.target <- datTab.target %>%
             mutate(PDB = ifelse(!is.na(PDB.code.1) & !is.na(PDB.code.2) & PDB.code.1 == PDB.code.2,
                                 PDB.code.1, NA)
             )
     }
+    datTab.decoy <- datTabList$Decoy
+    decoyLength <- nrow(datTab.decoy)
+    colsToAdd <- setdiff(names(datTab.target), names(datTab.decoy))
+    emptyCols <- matrix(nrow=decoyLength, ncol=length(colsToAdd)) 
+    colnames(emptyCols) <- colsToAdd
+    emptyCols <- as_tibble(emptyCols)
+    datTab.decoy <- bind_cols(datTab.decoy, emptyCols)
+    datTab <- bind_rows(datTab.target, datTab.decoy)
     return(datTab)
 }
 
