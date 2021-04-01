@@ -1629,6 +1629,10 @@ summarizeModuleData <- function(datTab) {
         filter(Decoy=="Target") %>%
         mutate(Module.1 = fct_explicit_na(Module.1, "other"),
                Module.2 = fct_explicit_na(Module.2, "other"))
+    datTab[c("Module.1", "Module.2")] <- datTab %>% 
+        select(Module.1, Module.2) %>% 
+        fct_unify %>% 
+        bind_cols
     datTab <- bestResPair(datTab)
     matrixCounts <- datTab %>%
         group_by(Module.1, Module.2) %>%
