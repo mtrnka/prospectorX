@@ -488,10 +488,10 @@ function(input, output, session) {
   
   output$proteinPlot <- renderPlot({
     req(summaryProtData())
-    summaryProtData() %>% 
+    summaryProtData() %>%
       ggplot(aes(Acc.1, Acc.2, size=counts, col=counts)) + 
       geom_point(na.rm=T) +
-      scale_size(range = c(-1, 12)) +
+      scale_size(range = c(-1, 10)) +
       scale_color_viridis_c(option="D") +
       theme_bw() + 
       theme(axis.text.x = element_text(angle=90, hjust=1),
@@ -548,7 +548,7 @@ function(input, output, session) {
     summaryModulData() %>% 
       ggplot(aes(Module.1, Module.2, size=counts, col=counts)) + 
       geom_point(na.rm=T) +
-      scale_size(range = c(-1, 12)) +
+      scale_size(range=c(-1,8)) +
       scale_color_viridis_c(option="D") +
       theme_bw() + 
       theme(axis.text.x = element_text(angle=90, hjust=1),

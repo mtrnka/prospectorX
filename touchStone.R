@@ -1563,7 +1563,8 @@ distancePlot2 <- function(datTab, threshold=35, binWidth=NA) {
         scale_fill_brewer(palette=4, type="seq", labels=abbreviate) + 
         theme_bw() +
         theme(plot.title = element_text(face = "bold", size = 14)) +
-        ggtitle("Protein Pairs")
+        ggtitle("Crosslink Lengths") +
+        xlab(expression(paste("C", alpha, "-C", alpha, " Distance (Å)")))
     
     print(p)
 }
@@ -1624,10 +1625,11 @@ summarizeProtData <- function(datTab) {
 }
 
 summarizeModuleData <- function(datTab) {
-    datTab <- datTab %>% filter(Decoy=="Target")
+    datTab <- datTab %>% 
+        filter(Decoy=="Target") %>%
+        mutate(Module.1 = fct_explicit_na(Module.1, "other"),
+               Module.2 = fct_explicit_na(Module.2, "other"))
     datTab <- bestResPair(datTab)
-    # datTab$Acc.1 <- fct_drop(datTab$Acc.1, only="decoy")
-    # datTab$Acc.2 <- fct_drop(datTab$Acc.2, only="decoy")
     matrixCounts <- datTab %>%
         group_by(Module.1, Module.2) %>%
         summarize(modCounts = sum(numCSM), .groups = "drop") %>%
