@@ -7,7 +7,7 @@ library(urltools)
 library(e1071)
 library(xml2)
 library(jsonlite)
-#library(bio3d)
+library(bio3d)
 source("./touchStone.R")
 
 mmax <- function(x, base=5) {
@@ -32,7 +32,7 @@ proton <- 1.007276
 H2O <- 18.01002
 
 # Path to MS-Viewer Data
-#exDir <- c(wd= './DemoFiles')
+# exDir <- c(wd= './DemoFiles')
 exDir <- c(wd= '/mnt/pipeline/projects')
 #pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
 pathToXiFile <- "/var/www/html/crosslink-viewer/demo/data"

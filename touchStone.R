@@ -63,8 +63,8 @@ parsePDB <- function(pdbID=NA, pdbFileDir=getwd()) {
     }
     parsedPDB <- tryCatch(
         switch(pdbExtension,
-               "cif" = bio3d::read.cif(pdbCode, verbose=F),
-               "pdb" = bio3d::read.pdb(pdbCode, verbose=F)
+               "cif" = read_cif(pdbCode, verbose=F, cacheDir=pdbFileDir),
+               "pdb" = read_pdb(pdbCode, verbose=F, cacheDir=pdbFileDir)
         ),
         error = function(e) {
             message(str_c("Trouble reading pdb id: ", pdbCode, "\n", e))
@@ -72,9 +72,9 @@ parsePDB <- function(pdbID=NA, pdbFileDir=getwd()) {
         }
     )
     if (sum(class(parsedPDB) %in% c("pdb", "cif")) == 0) return(NA)
-    if (!file.exists(file.path(pdbFileDir, pdbFile)) & ("pdb" %in% class(parsedPDB))) {
-        bio3d::write.pdb(parsedPDB, file.path(pdbFileDir, str_c(pdbCode, ".pdb")))
-    }
+    # if (!file.exists(file.path(pdbFileDir, pdbFile)) & ("pdb" %in% class(parsedPDB))) {
+    #     write.pdb(parsedPDB, file.path(pdbFileDir, str_c(pdbCode, ".pdb")))
+    # }
     ca.ind <- bio3d::atom.select(parsedPDB, "calpha")
     parsedPDB <- parsedPDB$atom[ca.ind$atom,]
     return(parsedPDB)
@@ -1692,3 +1692,193 @@ makeXiNetFile <- function(datTab) {
     names(datTab) <- c("Score", "Protein1", "Protein2", "LinkPos1", "LinkPos2")
     return(datTab)
 }
+
+read_pdb <- function (file, maxlines = -1, multi = FALSE, rm.insert = FALSE, 
+                      rm.alt = TRUE, ATOM.only = FALSE, hex = FALSE, 
+                      verbose = TRUE, cacheDir = tempdir()) {
+    require(bio3d)
+    cl <- match.call()
+    if (missing(file)) {
+        stop("read.pdb: please specify a PDB 'file' for reading")
+    }
+    if (!is.logical(multi)) {
+        stop("read.pdb: 'multi' must be logical TRUE/FALSE")
+    }
+    putfile <- NULL
+    if (substr(file, 1, 4) == "http") {
+        putfile <- tempfile(fileext = ".pdb")
+        rt <- try(download.file(file, putfile, quiet = !verbose), 
+                  silent = TRUE)
+        if (inherits(rt, "try-error")) {
+            file.remove(putfile)
+            stop("File not found at provided URL")
+        }
+        else {
+            file <- putfile
+        }
+    }
+    toread <- file.exists(file)
+    if (toread & basename(file) != file) {
+        file <- normalizePath(file)
+    }
+    if (!toread) {
+        if (nchar(file) == 4) {
+            cat("  Note: Accessing on-line PDB file\n")
+            file <- get.pdb(file, path = cacheDir, verbose = FALSE)
+        }
+        else {
+            stop("No input PDB file found: check filename")
+        }
+    }
+    pdb <- .read_pdb(file, multi = multi, hex = hex, maxlines = maxlines, 
+                     atoms_only = ATOM.only)
+    if (!is.null(putfile)) {
+        file.remove(putfile)
+    }
+    pdb$header <- NULL
+    if (!is.null(pdb$error)) 
+        stop(paste("Error in reading PDB file", file))
+    else class(pdb) <- c("pdb", "sse")
+    if (pdb$models > 1) 
+        pdb$xyz <- matrix(pdb$xyz, nrow = pdb$models, byrow = TRUE)
+    pdb$xyz <- as.xyz(pdb$xyz)
+    pdb$models <- NULL
+    pdb$atom[pdb$atom == ""] <- NA
+    names(pdb$seqres) <- pdb$seqres_chain
+    pdb$seqres_chain <- NULL
+    if (length(pdb$helix$start) > 0) {
+    }
+    else {
+        pdb$helix <- NULL
+    }
+    if (length(pdb$sheet$start) > 0) {
+        pa <- paste(pdb$sheet$start, pdb$sheet$inserti, pdb$sheet$chain, 
+                    sep = "_")
+        keep.inds <- which(!duplicated(pa))
+        pdb$sheet <- lapply(pdb$sheet, "[", keep.inds)
+        pdb$sheet$inserti <- NULL
+    }
+    else {
+        pdb$sheet <- NULL
+    }
+    if (!length(pdb$seqres) > 0) 
+        pdb$seqres <- NULL
+    if (!length(pdb$remark350) > 0) 
+        pdb$remark350 <- NULL
+    if (rm.alt) {
+        if (sum(!is.na(pdb$atom$alt)) > 0) {
+            first.alt <- sort(unique(na.omit(pdb$atom$alt)))[1]
+            cat(paste("   PDB has ALT records, taking", first.alt, 
+                      "only, rm.alt=TRUE\n"))
+            alt.inds <- which((pdb$atom$alt != first.alt))
+            if (length(alt.inds) > 0) {
+                pdb$atom <- pdb$atom[-alt.inds, ]
+                pdb$xyz <- trim.xyz(pdb$xyz, col.inds = -atom2xyz(alt.inds))
+            }
+        }
+    }
+    if (rm.insert) {
+        if (sum(!is.na(pdb$atom$insert)) > 0) {
+            cat("   PDB has INSERT records, removing, rm.insert=TRUE\n")
+            insert.inds <- which(!is.na(pdb$atom$insert))
+            pdb$atom <- pdb$atom[-insert.inds, ]
+            pdb$xyz <- trim.xyz(pdb$xyz, col.inds = -atom2xyz(insert.inds))
+        }
+    }
+    if (any(duplicated(pdb$atom$eleno))) 
+        warning("duplicated element numbers ('eleno') detected")
+    if (any(is.na(pdb$atom$resno))) {
+        warning("NA values for residue numbers ('resno') detected")
+    }
+    ca.inds <- atom.select.pdb(pdb, string = "calpha", verbose = FALSE)
+    pdb$calpha <- seq(1, nrow(pdb$atom)) %in% ca.inds$atom
+    remark <- .parse.pdb.remark350(pdb$remark350)
+    pdb$remark350 <- NULL
+    pdb$remark <- remark
+    pdb$call <- cl
+    return(pdb)
+}
+
+read_cif <- function (file, maxlines = -1, multi = FALSE, rm.insert = FALSE, 
+                      rm.alt = TRUE, verbose = TRUE, cacheDir = tempdir()) {
+    require(bio3d)
+    cl <- match.call()
+    warning("beta version of `read.cif`. please use with caution")
+    warning("helix/sheet records could not be parsed")
+    if (missing(file)) {
+        stop("read.cif: please specify a CIF 'file' for reading")
+    }
+    if (!is.logical(multi)) {
+        stop("read.cif: 'multi' must be logical TRUE/FALSE")
+    }
+    putfile <- NULL
+    if (substr(file, 1, 4) == "http") {
+        putfile <- tempfile(fileext = ".cif")
+        rt <- try(download.file(file, putfile, quiet = !verbose), 
+                  silent = TRUE)
+        if (inherits(rt, "try-error")) {
+            file.remove(putfile)
+            stop("File not found at provided URL")
+        }
+        else {
+            file <- putfile
+        }
+    }
+    toread <- file.exists(file)
+    if (toread & basename(file) != file) {
+        file <- normalizePath(file)
+    }
+    if (!toread) {
+        if (nchar(file) == 4) {
+            cat("  Note: Accessing on-line CIF file\n")
+            file <- get.pdb(file, path = cacheDir, quiet = TRUE, 
+                            format = "cif")
+        }
+        else {
+            stop("No input CIF file found: check filename")
+        }
+    }
+    pdb <- .read_cif(file, maxlines = maxlines, multi = multi)
+    if (!is.null(putfile)) {
+        file.remove(putfile)
+    }
+    if (!is.null(pdb$error)) 
+        stop(paste("Error in reading CIF file", file))
+    else class(pdb) <- c("pdb")
+    if (pdb$models > 1) 
+        pdb$xyz <- matrix(pdb$xyz, nrow = pdb$models, byrow = TRUE)
+    pdb$xyz <- as.xyz(pdb$xyz)
+    pdb$atom[pdb$atom == ""] <- NA
+    pdb$atom[pdb$atom == "?"] <- NA
+    pdb$atom[pdb$atom == "."] <- NA
+    pdb$models <- NULL
+    if (rm.alt) {
+        if (sum(!is.na(pdb$atom$alt)) > 0) {
+            first.alt <- sort(unique(na.omit(pdb$atom$alt)))[1]
+            cat(paste("   PDB has ALT records, taking", first.alt, 
+                      "only, rm.alt=TRUE\n"))
+            alt.inds <- which((pdb$atom$alt != first.alt))
+            if (length(alt.inds) > 0) {
+                pdb$atom <- pdb$atom[-alt.inds, ]
+                pdb$xyz <- trim.xyz(pdb$xyz, col.inds = -atom2xyz(alt.inds))
+            }
+        }
+    }
+    if (rm.insert) {
+        if (sum(!is.na(pdb$atom$insert)) > 0) {
+            cat("   PDB has INSERT records, removing, rm.insert=TRUE\n")
+            insert.inds <- which(!is.na(pdb$atom$insert))
+            pdb$atom <- pdb$atom[-insert.inds, ]
+            pdb$xyz <- trim.xyz(pdb$xyz, col.inds = -atom2xyz(insert.inds))
+        }
+    }
+    if (any(duplicated(pdb$atom$eleno))) 
+        warning("duplicated element numbers ('eleno') detected")
+    ca.inds <- atom.select.pdb(pdb, string = "calpha", verbose = FALSE)
+    pdb$calpha <- seq(1, nrow(pdb$atom)) %in% ca.inds$atom
+    pdb$call <- cl
+    return(pdb)
+}
+
+environment(read_pdb) <- asNamespace('bio3d')
+environment(read_cif) <- asNamespace('bio3d')

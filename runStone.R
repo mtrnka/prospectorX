@@ -33,8 +33,8 @@ processXLresult <- function(paramsSCresult) {
                              }
          )
       }
-      # Get Random Crosslinks
    }
+   # Write the touchstone annotated file.
       
    # Select Reporting Level.
    # Select Filters.

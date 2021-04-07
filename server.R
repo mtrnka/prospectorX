@@ -151,7 +151,7 @@ function(input, output, session) {
         mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
                                     MSMS.Info, instrumentType), generateMSViewerLink))
     }
-#    datTab <- generateCheckBoxes(datTab)
+    datTab <- generateCheckBoxes(datTab)
     minPPM = mmin(min(datTab$ppm, na.rm=T))
     maxPPM = mmax(max(datTab$ppm, na.rm=T))
     updateSliderInput(session, "ms1MassError", value = c(minPPM, maxPPM),
