@@ -148,7 +148,7 @@ function(input, output, session) {
       names(ms2Files) <- ms3Files
       ms2Files <- unique(ms2Files)
       datTab <- datTab %>%
-        mutate(Fraction.ms2 <- map_chr(test$Fraction, function(x) ms2Files[x]),
+        mutate(Fraction.ms2 <- map_chr(Fraction, function(x) ms2Files[x]),
                specMS3.1 = pmap_chr(list(msvFiles, Fraction, z.1, Peptide.1, MSMS.Info.1), generateMSViewerLink.ms3),
                specMS3.2 = pmap_chr(list(msvFiles, Fraction, z.2, Peptide.2, MSMS.Info.2), generateMSViewerLink.ms3),
                specMS2 = pmap_chr(list(msvFiles, Fraction.ms2, z, Peptide.1, Peptide.2,
