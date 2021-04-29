@@ -80,7 +80,9 @@ fluidPage(
                                 actionButton("viewXiNet", label = "View in xiNet"),
                                 uiOutput("ui_open_tab"),
                                 br(),br(),
-                                actionButton("scrapeMSP", label = "Scrape MS Product")
+                                actionButton("scrapeMSP", label = "Scrape MSProd"),
+                                br(),br(),
+                                actionButton("removeSel", label = "Remove Selected")
                          )
                      ),
                      tags$hr(),
@@ -175,7 +177,10 @@ fluidPage(
                                fluidRow(
                                    DT::dataTableOutput("dataFileDecoy")
                                )
-                      )
+                      )#,
+#                      tabPanel("blank",
+#                               verbatimTextOutput('test')
+#                      )
                   )
         )
     )

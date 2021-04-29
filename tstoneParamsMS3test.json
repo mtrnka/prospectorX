@@ -3,8 +3,8 @@
 	   "searchCompare_results": {
 	      "scResults_1": {
 	         "scFile_name": "DemoFiles/dssoMS3/MS3_DSSO_2.txt",
-	         "module_file": "DemoFiles/modules.txt",
-	         "chain_file": "chain.txt",
+	         "module_file": "DemoFiles/dssoMS3/rRibo_newMod.txt",
+	         "pdb_directory": "DemoFiles/pdbFiles",
 	         "instrument_type": "ESI-ION-TRAP-low-res",
 	         "filtered_peaklist_dir": "resultsDir2",
 	         "project_file": "projfile2",

@@ -134,7 +134,7 @@ testMS3 <- tstone3$searchCompare_results$scResults_1
 testMS3$experiment_scan_info$master_scan_file <- "paramsSCresultscanFile.txt"
 demo3 <- processXLresult(testMS3)
 
-tstone2 <- readTstoneParams("tstoneParamsMS2test2.json")
+tstone2 <- readTstoneParams("tstoneParamsMS2test.json")
 testMS2 <- tstone2$searchCompare_results$scResults_1
 demo2 <- processXLresult(testMS2)
 

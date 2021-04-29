@@ -220,10 +220,10 @@ assignModules <- function(datTab, moduleFile) {
     names(datTabList) <- datTab %>% group_keys() %>% pull(Decoy2)
     datTab.target <- datTabList$Target %>% 
         left_join(moduleFile, by=c("Acc.1"="Acc")) %>%
-        mutate("keepEntry" = pmap_lgl(select(., XLink.AA.1, first.AA, last.AA),
+        mutate("keepEntry" = suppressWarnings(pmap_lgl(select(., XLink.AA.1, first.AA, last.AA),
                                       function(XLink.AA.1, first.AA, last.AA) 
                                           dplyr::between(XLink.AA.1, first.AA, last.AA))
-        ) %>% 
+        )) %>% 
         filter(keepEntry | is.na(keepEntry)) %>%
         group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
         add_count(name="redundance") %>%
@@ -231,10 +231,10 @@ assignModules <- function(datTab, moduleFile) {
         ungroup() %>%
         select(-first.AA, -last.AA, -keepEntry, -Protein.name, -redundance) %>%
         left_join(moduleFile, by=c("Acc.2"="Acc"), suffix=c(".1", ".2")) %>%
-        mutate("keepEntry" = pmap_lgl(select(., XLink.AA.2, first.AA, last.AA),
+        mutate("keepEntry" = suppressWarnings(pmap_lgl(select(., XLink.AA.2, first.AA, last.AA),
                                       function(XLink.AA.2, first.AA, last.AA) 
                                           dplyr::between(XLink.AA.2, first.AA, last.AA))
-        ) %>% 
+        )) %>% 
         filter(keepEntry | is.na(keepEntry)) %>%
         group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
         add_count(name="redundance") %>%
@@ -758,19 +758,21 @@ generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectr
     }
 }
 
-generateMSViewerLink.ms3 <- function(path, fraction, rt, z, peptide, spectrum) {
-    if(!str_detect(fraction, "\\.[[a-z]]$")) {
+generateMSViewerLink.ms3 <- function(path, fraction, z, peptide, spectrum,
+                                     instrumentType = NA, outputType = "HTML") {
+    if(!str_detect(fraction, "\\.[[a-z]]+$")) {
         fraction <- paste0(fraction, ".mgf")
     }
-    instrumentType <- switch(
-        #        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
-        str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
-        "ESI-Q-high-res",
-        ethcd = "ESI-EThcD-high-res",
-        etd = "ESI-ETD-high-res",
-        hcd = "ESI-Q-high-res",
-        cid = "ESI-ION-TRAP-low-res"
-    )
+    if (is.na(instrumentType)) {
+        instrumentType <- switch(
+            #        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
+            str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
+            "ESI-Q-high-res",
+            ethcd = "ESI-EThcD-high-res",
+            etd = "ESI-ETD-high-res",
+            hcd = "ESI-Q-high-res" #Add other instrument types
+        )
+    }
     templateVals.ms3[6] <- file.path(path, fraction)
     templateVals.ms3[9] <- instrumentType
     templateVals.ms3[18] <- rt
@@ -781,11 +783,6 @@ generateMSViewerLink.ms3 <- function(path, fraction, rt, z, peptide, spectrum) {
     templateVals.ms3 <- url_encode(templateVals.ms3)
     zipped <- str_c(templateKeys.ms3[1:25], templateVals.ms3[1:25], sep="=", collapse="&")
     str_c('<a href=\"', zipped, '\" target=\"_blank\">', peptide, '</a>')
-}
-
-generateCheckBoxes <- function(datTab) {
-    datTab$selected <- str_c('<input type="checkbox" names="row', datTab$xlinkedResPair, '"value="', datTab$xlinkedResPair, '">',"")
-    return(datTab)
 }
 
 readMSProductInfo <- function(datTab) {
@@ -883,7 +880,7 @@ formatXLTable <- function(datTab) {
             select(-any_of("distance"))
     }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
-    datTab <- datTab %>% select(any_of(c("selected", "link", "link.1", "link.2", "xlinkedResPair",
+    datTab <- datTab %>% select(any_of(c("keep", "link", "link.1", "link.2", "xlinkedResPair",
                                          "xlinkedProtPair", "xlinkedModulPair",
                                 "SVM.score", "SVM.new", "distance", "m.z", "z", "ppm",
                                 "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
@@ -892,7 +889,7 @@ formatXLTable <- function(datTab) {
                                 "Acc.2", "XLink.AA.2", "Protein.2", "Module.2", "Species.2",
                                 "xlinkClass", "Len.Pep.1", "Len.Pep.2",
                                 "Peptide.1", "Peptide.2", "numCSM", "numPPSM", "numMPSM",
-                                "Fraction", "RT", "MSMS.Info")))
+                                "Fraction", "RT", "MSMS.Info", "id")))
     if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
                                     Protein.2 = factor(Protein.2))
@@ -936,6 +933,9 @@ formatXLTable <- function(datTab) {
     }
     if ("MSMS.Info" %in% names(datTab)) {
         datTab <- datTab %>% mutate(MSMS.Info = as.integer(MSMS.Info))
+    }
+    if ("SVM.score" %in% names(datTab)) {
+        datTab <- datTab %>% mutate(SVM.score = round(SVM.score, 2))
     }
     datTab <- datTab %>% mutate(xlinkedResPair = fct_drop(xlinkedResPair))
     return(datTab)
@@ -1047,6 +1047,9 @@ addMasterScanInfo <- function(ms3results, masterScanFile) {
 }
 
 processMS3xlinkResults <- function(ms3results) {
+ #   require(future)
+ #   require(furrr)
+ #   future::plan(multicore)
     n_ms3 <- ms3results %>% group_by(ms2cidScanNo, Fraction.ms3) %>% nest()
     ms3crosslinksFlat <- pmap_dfr(list(n_ms3$Fraction.ms3,
                                        n_ms3$ms2cidScanNo,
@@ -1158,7 +1161,7 @@ flattenMS3pair <- function(ms3CSM1, ms3CSM2, fraction, masterScanNo=NA,
         frag1 <- frag2
         frag2 <- tempFrag
     }
-    flatCSM <- tibble(ms2cidScanNo=masterScanNo,
+    flatCSM <- tibble(MSMS.Info=masterScanNo,
                       MSMS.Info.1=ms3CSM1$`ms3ScanNo`,
                       MSMS.Info.2=ms3CSM2$`ms3ScanNo`,
                       DB.Peptide.1=ms3CSM1$`DB.Peptide.ms3`,

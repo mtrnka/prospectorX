@@ -7,7 +7,7 @@ function(input, output, session) {
   })
   
   pdbInfo <- reactiveVal(FALSE)
-
+  
   output$svmThreshSliders <- renderUI({
     if (input$separateFDRs) {
       tagList(
@@ -151,7 +151,11 @@ function(input, output, session) {
         mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
                                     MSMS.Info, instrumentType), generateMSViewerLink))
     }
-    datTab <- generateCheckBoxes(datTab)
+    datTab.len <- nrow(datTab)
+    datTab <- datTab %>% mutate(id = str_c("xl", 1:nrow(datTab)),
+                                keep = map_chr(id, function(x) {
+                                  as.character(checkboxInput(x, label=NULL, value=T, width='20px'))
+                                  }))
     minPPM = mmin(min(datTab$ppm, na.rm=T))
     maxPPM = mmax(max(datTab$ppm, na.rm=T))
     updateSliderInput(session, "ms1MassError", value = c(minPPM, maxPPM),
@@ -244,100 +248,60 @@ function(input, output, session) {
     "; intraProtein: ", numIntra, "; interProtein: ", numInter)
   })
   
+  prepDT <- function(xltab) {
+    displayTable <- formatXLTable(xltab)
+    wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
+                                                 "DB.Peptide.1",
+                                                 "DB.Peptide.2",
+                                                 "Protein.1",
+                                                 "Protein.2",
+                                                 "Peptide.1",
+                                                 "Peptide.2",
+                                                 "Module.1",
+                                                 "Module.2",
+                                                 "Fraction")) - 1
+    DT::datatable(displayTable,
+                  rownames=FALSE,
+                  filter="top",
+                  escape=FALSE,
+                  options = list(autoWidth=TRUE,
+                                 deferRender=TRUE,
+                                 processing=TRUE,
+                                 columnDefs=list(
+                                   list(width = '250px', targets = as.list(wideCols))
+                                   ),
+                                 scrollX=TRUE,
+                                 scrollY="80vh",
+                                 scrollCollapse=TRUE,
+                                 paging=TRUE,
+                                 pageLength=100,
+                                 search.caseInsensitive=TRUE,
+                                 scroller=TRUE,
+                                 preDrawCallback = JS(
+                                   'function() { 
+                                   Shiny.unbindAll(this.api().table().node()); 
+                                   }'),
+                                 drawCallback = JS(
+                                   'function() { 
+                                   Shiny.bindAll(this.api().table().node()); 
+                                   } ')
+                  ),
+    )
+  }
+  
   output$dataFile <- DT::renderDataTable({
     req(xlTable())
-    displayTable <- formatXLTable(xlTable())
-    wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
-                                                 "DB.Peptide.1",
-                                                 "DB.Peptide.2",
-                                                 "Protein.1",
-                                                 "Protein.2",
-                                                 "Peptide.1",
-                                                 "Peptide.2",
-                                                 "Module.1",
-                                                 "Module.2",
-                                                 "Fraction"))
-    DT::datatable(displayTable,
-                  options = list(autoWidth=TRUE,
-                                 deferRender=TRUE,
-                                 processing=TRUE,
-                                 columnDefs=list(list(width = '200px', targets = as.list(wideCols))),
-                                 #                                 columnDefs=list(list(width = '200px', targets = c(3,7,8,17,21,26,27))),
-                                 scrollX=TRUE,
-                                 scrollY="80vh",
-                                 scrollCollapse=TRUE,
-                                 paging=TRUE,
-                                 pageLength=100,
-                                 search.caseInsensitive=TRUE,
-                                 scroller=TRUE
-                  ),
-                  filter="top",
-                  escape=FALSE
-    )
+    prepDT(xlTable())
   })
-  
+
   output$dataFileSelected <- DT::renderDataTable({
     req(xlTableSelected())
-    displayTable <- formatXLTable(xlTableSelected())
-    wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
-                                                 "DB.Peptide.1",
-                                                 "DB.Peptide.2",
-                                                 "Protein.1",
-                                                 "Protein.2",
-                                                 "Peptide.1",
-                                                 "Peptide.2",
-                                                 "Module.1",
-                                                 "Module.2",
-                                                 "Fraction"))
-    DT::datatable(displayTable,
-                  options = list(autoWidth=TRUE,
-                                 deferRender=TRUE,
-                                 processing=TRUE,
-                                 columnDefs=list(list(width = '200px', targets = as.list(wideCols))),
-                                 #                                 columnDefs=list(list(width = '200px', targets = c(3,7,8,17,21,26,27))),
-                                 scrollX=TRUE,
-                                 scrollY="80vh",
-                                 scrollCollapse=TRUE,
-                                 paging=TRUE,
-                                 pageLength=100,
-                                 search.caseInsensitive=TRUE,
-                                 scroller=TRUE
-                  ),
-                  filter="top",
-                  escape=FALSE
-    )
+    prepDT(xlTableSelected())
   })
 
   output$dataFileDecoy <- DT::renderDataTable({
     req(xlTableDecoy())
-    displayTable <- formatXLTable(xlTableDecoy())
-    wideCols <- which(names(displayTable) %in% c("xlinkeResPair",
-                                                 "DB.Peptide.1",
-                                                 "DB.Peptide.2",
-                                                 "Protein.1",
-                                                 "Protein.2",
-                                                 "Peptide.1",
-                                                 "Peptide.2",
-                                                 "Module.1",
-                                                 "Module.2",
-                                                 "Fraction"))
-    DT::datatable(displayTable,
-                  options = list(autoWidth=TRUE,
-                                 deferRender=TRUE,
-                                 processing=TRUE,
-                                 columnDefs=list(list(width = '200px', targets = as.list(wideCols))),
-                                 #                                 columnDefs=list(list(width = '200px', targets = c(3,7,8,17,21,26,27))),
-                                 scrollX=TRUE,
-                                 scrollY="80vh",
-                                 scrollCollapse=TRUE,
-                                 paging=TRUE,
-                                 pageLength=100,
-                                 search.caseInsensitive=TRUE,
-                                 scroller=TRUE
-                  ),
-                  filter="top",
-                  escape=FALSE
-    )
+    prepDT(xlTableDecoy())
   })
   
   fdr <- reactiveVal()
@@ -482,7 +446,7 @@ function(input, output, session) {
     summaryProtData() %>%
       ggplot(aes(Acc.1, Acc.2, size=counts, col=counts)) + 
       geom_point(na.rm=T) +
-      scale_size(range = c(-1, 10)) +
+      scale_size_area(max_size = 10)+#range = c(-1, 10)) +
       scale_color_viridis_c(option="D") +
       theme_bw() + 
       theme(axis.text.x = element_text(angle=90, hjust=1),
@@ -593,27 +557,67 @@ function(input, output, session) {
   observeEvent(input$scrapeMSP, {
     req(scResults())
     datTab <- scResults()
+    require(future)
+    require(furrr)
+    future::plan(multicore)
+    # The links should be generated in touchStone upon reading the SC file:
     msvFilePath <- parseFilePaths(exDir, input$clmsData)$datapath
-    msvFiles <- system2("ls", c("-d", file.path(dirname(msvFilePath), "*/")), stdout=T)
-    msvFiles <- str_replace(msvFiles, "\\/$", "")
-    #    ms.product.info <- readMSProductInfo(csmTab())
-    withProgress(message = "scraping MS-Product", value = 0, {
-      numPoints <- nrow(datTab)
+    msvFiles <- list.dirs(dirname(msvFilePath), recursive = F)
+    btName <- dirname(dirname(msvFilePath))
+    btNameDir <- dirname(btName)
+    btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))
+    if (length(btParamFile) > 0) {
+      btParams <- readParamsFile(file.path(btNameDir, btParamFile))
+    } else {
+      btParams <- NA
+    }
+    if (!is.na(btParams)) {
+      instrumentType <- btParams %>%
+        xml_find_all("instrument_name") %>%
+        xml_text()
+    } else {
+      instrumentType <- NA
+    }
+    if (input$experimentType == "ms3") {
+#      datTab <- datTab %>%
+#        mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
+#               Peptide.2 = pmap_chr(list(msvFiles, Fraction, RT.2, z.2, Peptide.2, Spectrum.2), generateMSViewerLink.ms3)
+#        )
+    } else {
+      
+      #    withProgress(message = "scraping MS-Product", value = 0, {
+      #      numPoints <- nrow(datTab)
       ms.product.info <-
-        pmap_chr(list(msvFiles, datTab$Fraction, datTab$z, datTab$Peptide.1, datTab$Peptide.2, datTab$MSMS.Info,
+        pmap_chr(list(msvFiles, datTab$Fraction, datTab$z, datTab$Peptide.1, 
+                      datTab$Peptide.2, datTab$MSMS.Info, instrumentType,
                       "Tab delimited text"), generateMSViewerLink) %>%
-        map(function(msvLink) {
+        map_future(function(msvLink) {
           spec.html <- xml2::read_html(msvLink)
           spec.node <- rvest::html_node(spec.html, xpath = '//*[@id="centerbody"]')
           spec.table <- read_tsv(rvest::html_text(spec.node))
-          incProgress(1/numPoints)
+          #          incProgress(1/numPoints)
           return(spec.table)
         })
-    })
+    }
     percentMatched <- getPercentMatched(ms.product.info)
     datTab <- cbind(datTab, percentMatched)
     datTab <- buildClassifierExperimental(datTab, params.best, "SVM.new")
     scResults(datTab)
   })
+  
+  # output$test = renderPrint({
+  #   req(xlTable())
+  #   id <- xlTable()  %>% slice(1:100) %>% pull(id)
+  #   values <- map_lgl(id, function(x) input[[x]])
+  #   return(data.frame(id, values))
+  # })
+    
+  observeEvent(input$removeSel, {
+    req(xlTable())
+    unSelected <- map_lgl(xlTable()$id, function(x) input[[x]])
+    removedXLtable <- xlTable() %>% filter(unSelected)
+    xlTable(removedXLtable)
+  })
+  
   
 }

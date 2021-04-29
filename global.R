@@ -32,7 +32,7 @@ proton <- 1.007276
 H2O <- 18.01002
 
 # Path to MS-Viewer Data
-# exDir <- c(wd= './DemoFiles')
+#exDir <- c(wd= './DemoFiles')
 exDir <- c(wd= '/mnt/pipeline/projects')
 #pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
 pathToXiFile <- "/var/www/html/crosslink-viewer/demo/data"
@@ -139,3 +139,4 @@ queryTemplate.ms3 <- str_split(queryTemplate.ms3, "=")
 templateKeys.ms3 <- map_chr(queryTemplate.ms3, function(x) {x[1]})
 templateVals.ms3 <- map_chr(queryTemplate.ms3, function(x) {x[2]})
 templateVals.ms3 <- url_decode(templateVals.ms3)
+
