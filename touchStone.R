@@ -773,16 +773,22 @@ generateMSViewerLink.ms3 <- function(path, fraction, z, peptide, spectrum,
             hcd = "ESI-Q-high-res" #Add other instrument types
         )
     }
-    templateVals.ms3[6] <- file.path(path, fraction)
-    templateVals.ms3[9] <- instrumentType
-    templateVals.ms3[18] <- rt
-    templateVals.ms3[20] <- spectrum
-    templateVals.ms3[21] <- z
-    templateVals.ms3[22] <- z
-    templateVals.ms3[23] <- peptide
+    templateVals.ms3["output_type"] <- outputType
+    templateVals.ms3["data_filename"] <- file.path(path, fraction)
+    templateVals.ms3["instrument_name"] <- instrumentType
+    templateVals.ms3["scan_number"] <- spectrum
+    templateVals.ms3["max_charge"] <- z
+    templateVals.ms3["msms_precursor_charge"] <- z
+    templateVals.ms3["sequence"] <- peptide
+    templateNames.ms3 <- names(templateVals.ms3)
     templateVals.ms3 <- url_encode(templateVals.ms3)
-    zipped <- str_c(templateKeys.ms3[1:25], templateVals.ms3[1:25], sep="=", collapse="&")
-    str_c('<a href=\"', zipped, '\" target=\"_blank\">', peptide, '</a>')
+    names(templateVals.ms3) <- templateNames.ms3
+    zipped <- str_c(names(templateVals.ms3), templateVals.ms3, sep="=", collapse="&")
+    if (outputType == "HTML") {
+        return(str_c('<a href=\"', zipped, '\" target=\"_blank\">Spectrum</a>'))
+    } else {
+        return(zipped)
+    }
 }
 
 readMSProductInfo <- function(datTab) {
@@ -880,7 +886,7 @@ formatXLTable <- function(datTab) {
             select(-any_of("distance"))
     }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
-    datTab <- datTab %>% select(any_of(c("keep", "link", "link.1", "link.2", "xlinkedResPair",
+    datTab <- datTab %>% select(any_of(c("keep", starts_with("spec"), "xlinkedResPair",
                                          "xlinkedProtPair", "xlinkedModulPair",
                                 "SVM.score", "SVM.new", "distance", "m.z", "z", "ppm",
                                 "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",

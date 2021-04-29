@@ -80,9 +80,10 @@ function(input, output, session) {
         inFile <- parseFilePaths(exDir, input$clmsData)
         ms3Files <- parseFilePaths(exDir, input$ms3pkls)$datapath
         ms2Files <- parseFilePaths(exDir, input$ms2pkls)$datapath
-        scTable <- processMS3xlinkResultsMultiFile(
-          inFile$datapath, ms3Files, ms2Files
-        )
+        masterScanFile <- createMasterScanFile(ms3Files, ms2Files)
+        searchCompareMS3 <- readMS3results(inFile$datapath)
+        searchCompareMS3 <- addMasterScanInfo(searchCompareMS3, masterScanFile)
+        scTable <- processMS3xlinkResults(searchCompareMS3)
         scTable <- scTable %>% mutate(SVM.score = Score.Diff / 10)
         consoleMessage("*** Loading Search Compare File ***")
         return(scTable)
@@ -143,12 +144,14 @@ function(input, output, session) {
     }
     if (input$experimentType == "ms3") {
       datTab <- datTab %>%
-        mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
-               Peptide.2 = pmap_chr(list(msvFiles, Fraction, RT.2, z.2, Peptide.2, Spectrum.2), generateMSViewerLink.ms3)
+        mutate(specMS3.1 = pmap_chr(list(msvFiles, Fraction, z.1, Peptide.1, MSMS.Info.1), generateMSViewerLink.ms3),
+               specMS3.2 = pmap_chr(list(msvFiles, Fraction, z.2, Peptide.2, MSMS.Info.2), generateMSViewerLink.ms3),
+               specMS2 = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
+                                    MSMS.Info, instrumentType), generateMSViewerLink)
         )
     } else {
       datTab <- datTab %>%
-        mutate(link = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
+        mutate(specMS2 = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
                                     MSMS.Info, instrumentType), generateMSViewerLink))
     }
     datTab.len <- nrow(datTab)
@@ -520,7 +523,7 @@ function(input, output, session) {
     xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
     write_csv(xiFile, xiFilePath)
     output$ui_open_tab <- renderUI({
-      baseLink <- 'http://lanhuang2.physiology.uci.edu/crosslink-viewer/demo/Demo2.html'
+      baseLink <- linkToXiView
       link <- str_c(baseLink, xiFileName, sep="?fileName=")
       tags$script(paste0("window.open('", link, "', '_blank')"))
     })
@@ -534,7 +537,7 @@ function(input, output, session) {
     xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
     write_csv(xiFile, xiFilePath)
     output$ui_open_tab_sel_two <- renderUI({
-      baseLink <- 'http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo2.html'
+      baseLink <- linkToXiView
       link <- str_c(baseLink, xiFileName, sep="?fileName=")
       tags$script(paste0("window.open('", link, "', '_blank')"))
     })
@@ -548,7 +551,7 @@ function(input, output, session) {
     xiFilePath <- str_c(pathToXiFile, "/", xiFileName, ".csv")
     write_csv(xiFile, xiFilePath)
     output$ui_open_tab_sel <- renderUI({
-      baseLink <- 'http://rodin05.ucsf.edu/crosslink-viewer/demo/Demo2.html'
+      baseLink <- linkToXiView
       link <- str_c(baseLink, xiFileName, sep="?fileName=")
       tags$script(paste0("window.open('", link, "', '_blank')"))
     })
@@ -579,10 +582,6 @@ function(input, output, session) {
       instrumentType <- NA
     }
     if (input$experimentType == "ms3") {
-#      datTab <- datTab %>%
-#        mutate(Peptide.1 = pmap_chr(list(msvFiles, Fraction, RT.1, z.1, Peptide.1, Spectrum.1), generateMSViewerLink.ms3),
-#               Peptide.2 = pmap_chr(list(msvFiles, Fraction, RT.2, z.2, Peptide.2, Spectrum.2), generateMSViewerLink.ms3)
-#        )
     } else {
       
       #    withProgress(message = "scraping MS-Product", value = 0, {
@@ -604,6 +603,8 @@ function(input, output, session) {
     datTab <- buildClassifierExperimental(datTab, params.best, "SVM.new")
     scResults(datTab)
   })
+
+  # These are test function to explore how to make the checkboxes work right.
   
   # output$test = renderPrint({
   #   req(xlTable())
@@ -612,12 +613,12 @@ function(input, output, session) {
   #   return(data.frame(id, values))
   # })
     
-  observeEvent(input$removeSel, {
-    req(xlTable())
-    unSelected <- map_lgl(xlTable()$id, function(x) input[[x]])
-    removedXLtable <- xlTable() %>% filter(unSelected)
-    xlTable(removedXLtable)
-  })
-  
+  # observeEvent(input$removeSel, {
+  #   req(xlTable())
+  #   unSelected <- map_lgl(xlTable()$id, function(x) input[[x]])
+  #   removedXLtable <- xlTable() %>% filter(unSelected)
+  #   xlTable(removedXLtable)
+  # })
+  # 
   
 }
