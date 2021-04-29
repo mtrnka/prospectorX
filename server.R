@@ -131,7 +131,7 @@ function(input, output, session) {
     btNameDir <- dirname(btName)
     btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))
     if (length(btParamFile) > 0) {
-    btParams <- readParamsFile(file.path(btNameDir, btParamFile))
+      btParams <- readParamsFile(file.path(btNameDir, btParamFile))
     } else {
       btParams <- NA
     }
@@ -143,10 +143,15 @@ function(input, output, session) {
       instrumentType <- NA
     }
     if (input$experimentType == "ms3") {
+      ms3Files <- parseFilePaths(exDir, input$ms3pkls)$datapath
+      ms2Files <- parseFilePaths(exDir, input$ms2pkls)$datapath
+      names(ms2Files) <- ms3Files
+      ms2Files <- unique(ms2Files)
       datTab <- datTab %>%
-        mutate(specMS3.1 = pmap_chr(list(msvFiles, Fraction, z.1, Peptide.1, MSMS.Info.1), generateMSViewerLink.ms3),
+        mutate(Fraction.ms2 <- map_chr(test$Fraction, function(x) ms2Files[x]),
+               specMS3.1 = pmap_chr(list(msvFiles, Fraction, z.1, Peptide.1, MSMS.Info.1), generateMSViewerLink.ms3),
                specMS3.2 = pmap_chr(list(msvFiles, Fraction, z.2, Peptide.2, MSMS.Info.2), generateMSViewerLink.ms3),
-               specMS2 = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
+               specMS2 = pmap_chr(list(msvFiles, Fraction.ms2, z, Peptide.1, Peptide.2,
                                     MSMS.Info, instrumentType), generateMSViewerLink)
         )
     } else {
