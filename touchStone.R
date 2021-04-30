@@ -983,16 +983,34 @@ calculatePrecMass <- function(pepMass, charge) {
     return(precMass)
 }
 
+# getIndicesForFile_orig <- function(file) {
+#     mgfFile <- readLines(file)
+#     scanNo <- na.omit(str_match(mgfFile, "TITLE=Scan\\s([[0-9]]+)"))
+#     scanNo <- as.integer(scanNo[,2])
+#     masterScanNo <- na.omit(str_match(mgfFile, "Master_Scan_Number=([[0-9]]+)"))
+#     masterScanNo <- as.integer(masterScanNo[,2])
+#     pepMass <- na.omit(str_match(mgfFile, "PEPMASS=([[0-9]]+\\.[[0-9]]+)"))
+#     pepMass <- as.numeric(pepMass[,2])
+#     charge <- na.omit(str_match(mgfFile, "CHARGE=([[0-9]])\\+"))
+#     charge <- as.integer(charge[,2])
+#     extract <- data.frame(scanNo=scanNo, masterScanNo=masterScanNo, 
+#                           pepmass=pepMass, charge=charge)
+#     return(extract)
+# }
+
 getIndicesForFile <- function(file) {
-    mgfFile <- readLines(file)
-    scanNo <- na.omit(str_match(mgfFile, "TITLE=Scan\\s([[0-9]]+)"))
-    scanNo <- as.integer(scanNo[,2])
-    masterScanNo <- na.omit(str_match(mgfFile, "Master_Scan_Number=([[0-9]]+)"))
-    masterScanNo <- as.integer(masterScanNo[,2])
-    pepMass <- na.omit(str_match(mgfFile, "PEPMASS=([[0-9]]+\\.[[0-9]]+)"))
-    pepMass <- as.numeric(pepMass[,2])
-    charge <- na.omit(str_match(mgfFile, "CHARGE=([[0-9]])\\+"))
-    charge <- as.integer(charge[,2])
+    scanNo <- system2("grep", c("'TITLE=Scan'", file), stdout = T)
+    scanNo <- str_extract(scanNo, "(?<=TITLE\\=Scan\\s)[[0-9]]+")
+    scanNo <- as.integer(scanNo)
+    masterScanNo <- system2("grep", c("'Master_Scan_Number'", file), stdout = T)
+    masterScanNo <- str_extract(masterScanNo, "(?<=Master_Scan_Number\\=)([[0-9]]+)")
+    masterScanNo <- as.integer(masterScanNo)
+    pepMass <- system2("grep", c("'PEPMASS'", file), stdout = T)
+    pepMass <- str_extract(pepMass, "(?<=PEPMASS\\=)[[0-9]]+\\.[[0-9]]+")
+    pepMass <- as.numeric(pepMass)
+    charge <- system2("grep", c("'CHARGE'", file), stdout = T)
+    charge <- str_extract(charge, "(?<=CHARGE\\=)[[0-9]](?=\\+)")
+    charge <- as.integer(charge)
     extract <- data.frame(scanNo=scanNo, masterScanNo=masterScanNo, 
                           pepmass=pepMass, charge=charge)
     return(extract)
@@ -1068,16 +1086,16 @@ addMasterScanInfo <- function(ms3results, masterScanFile) {
 
 processMS3xlinkResults <- function(ms3results, tol=25) {
     n_ms3 <- ms3results %>% group_by(ms2cidScanNo, Fraction.ms3) %>% nest()
-    ms3crosslinksFlat <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+    ms3crosslinksFlat <- pmap_dfr(list(n_ms3$Fraction.ms3,
                                               n_ms3$ms2cidScanNo,
                                               n_ms3$data), ms3ionFragFind, tol)
-    ms3crosslinksFlatMis <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+    ms3crosslinksFlatMis <- pmap_dfr(list(n_ms3$Fraction.ms3,
                                                  n_ms3$ms2cidScanNo,
                                                  n_ms3$data), ms3ionFragFind, tol, mis=proton)
-    ms3crosslinksFlatMis2 <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+    ms3crosslinksFlatMis2 <- pmap_dfr(list(n_ms3$Fraction.ms3,
                                                   n_ms3$ms2cidScanNo,
                                                   n_ms3$data), ms3ionFragFind, tol, mis=2*proton)
-    ms3crosslinksFlatMisM1 <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+    ms3crosslinksFlatMisM1 <- pmap_dfr(list(n_ms3$Fraction.ms3,
                                                    n_ms3$ms2cidScanNo,
                                                    n_ms3$data), ms3ionFragFind, tol, mis=-1*proton)
     ms3crosslinksFlat <- rbind(ms3crosslinksFlatMisM1, ms3crosslinksFlatMis2, ms3crosslinksFlatMis, ms3crosslinksFlat)
