@@ -89,14 +89,18 @@ gatherPDBs <- function(modFile, pdbFileDir=getwd()) {
 }
 
 euclideanDistance <- function(XLink.AA.1, PDB.chain.1, XLink.AA.2, PDB.chain.2, parsedPDB, ...) {
-    coord1 <- parsedPDB[parsedPDB$chain==PDB.chain.1 & parsedPDB$resno==XLink.AA.1,
-                        c("x","y","z")]
-    if (nrow(coord1)==0) coord1 <- NA
-    coord2 <- parsedPDB[parsedPDB$chain==PDB.chain.2 & parsedPDB$resno==XLink.AA.2,
-                        c("x","y","z")]
-    if (nrow(coord2)==0) coord2 <- NA
-    distance <- sqrt(sum((coord1 - coord2)**2))
-    return(round(distance,2))
+    if (is.na(PDB.chain.1) | is.na(PDB.chain.2)) {
+        return(NA_real_)
+    } else {
+        coord1 <- parsedPDB[parsedPDB$chain==PDB.chain.1 & parsedPDB$resno==XLink.AA.1,
+                            c("x","y","z")]
+        if (nrow(coord1)==0) coord1 <- NA
+        coord2 <- parsedPDB[parsedPDB$chain==PDB.chain.2 & parsedPDB$resno==XLink.AA.2,
+                            c("x","y","z")]
+        if (nrow(coord2)==0) coord2 <- NA
+        distance <- sqrt(sum((coord1 - coord2)**2))
+        return(round(distance,2))
+    }
 }
 
 euclideanHelper <- function(datTab, parsedPDB) {

@@ -132,15 +132,16 @@ processMS3result <- function(paramsSCresult) {
 
 tstone3 <- readTstoneParams("tstoneParamsMS3test.json")
 testMS3 <- tstone3$searchCompare_results$scResults_1
-#testMS3$experiment_scan_info$master_scan_file <- "paramsSCresultscanFile.txt"
-
-profvis({
+testMS3$experiment_scan_info$master_scan_file <- "paramsSCresultscanFile.txt"
+#profvis(
 demo3 <- processXLresult(testMS3)
-})
+#)
 
 tstone2 <- readTstoneParams("tstoneParamsMS2test.json")
 testMS2 <- tstone2$searchCompare_results$scResults_1
+#profvis(
 demo2 <- processXLresult(testMS2)
+#)
 
 newMod <- readModuleFile(testMS2$module_file)
 #pdbFiles <- gatherPDBs(newMod, pdbFileDir = testMS2$pdb_directory)
