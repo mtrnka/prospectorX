@@ -8,6 +8,10 @@ library(e1071)
 library(xml2)
 library(jsonlite)
 library(bio3d)
+library(future)
+library(furrr)
+
+future::plan(multicore)
 source("./touchStone.R")
 
 mmax <- function(x, base=5) {

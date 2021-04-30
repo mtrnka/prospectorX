@@ -899,7 +899,7 @@ formatXLTable <- function(datTab) {
     }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
     datTab <- datTab %>% select(any_of(c(
-        "keep", "Fraction.ms2", "specMS2", "specMS3.1", "specMS3.2", 
+        "keep", "specMS2", "specMS3.1", "specMS3.2", 
         "xlinkedResPair", "xlinkedProtPair", "xlinkedModulPair",
         "SVM.score", "SVM.new", "distance", "m.z", "z", "ppm",
         "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
@@ -1066,23 +1066,20 @@ addMasterScanInfo <- function(ms3results, masterScanFile) {
    return(ms3results)
 }
 
-processMS3xlinkResults <- function(ms3results) {
- #   require(future)
- #   require(furrr)
- #   future::plan(multicore)
+processMS3xlinkResults <- function(ms3results, tol=25) {
     n_ms3 <- ms3results %>% group_by(ms2cidScanNo, Fraction.ms3) %>% nest()
-    ms3crosslinksFlat <- pmap_dfr(list(n_ms3$Fraction.ms3,
-                                       n_ms3$ms2cidScanNo,
-                                       n_ms3$data), ms3ionFragFind, tol=50)
-    ms3crosslinksFlatMis <- pmap_dfr(list(n_ms3$Fraction.ms3,
-                                          n_ms3$ms2cidScanNo,
-                                          n_ms3$data), ms3ionFragFind, tol=50, mis=proton)
-    ms3crosslinksFlatMis2 <- pmap_dfr(list(n_ms3$Fraction.ms3,
-                                           n_ms3$ms2cidScanNo,
-                                           n_ms3$data), ms3ionFragFind, tol=50, mis=2*proton)
-    ms3crosslinksFlatMisM1 <- pmap_dfr(list(n_ms3$Fraction.ms3,
-                                            n_ms3$ms2cidScanNo,
-                                            n_ms3$data), ms3ionFragFind, tol=50, mis=-1*proton)
+    ms3crosslinksFlat <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+                                              n_ms3$ms2cidScanNo,
+                                              n_ms3$data), ms3ionFragFind, tol)
+    ms3crosslinksFlatMis <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+                                                 n_ms3$ms2cidScanNo,
+                                                 n_ms3$data), ms3ionFragFind, tol, mis=proton)
+    ms3crosslinksFlatMis2 <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+                                                  n_ms3$ms2cidScanNo,
+                                                  n_ms3$data), ms3ionFragFind, tol, mis=2*proton)
+    ms3crosslinksFlatMisM1 <- future_pmap_dfr(list(n_ms3$Fraction.ms3,
+                                                   n_ms3$ms2cidScanNo,
+                                                   n_ms3$data), ms3ionFragFind, tol, mis=-1*proton)
     ms3crosslinksFlat <- rbind(ms3crosslinksFlatMisM1, ms3crosslinksFlatMis2, ms3crosslinksFlatMis, ms3crosslinksFlat)
     ms3crosslinksFlat$Score.Diff <- ms3crosslinksFlat$Sc.2
     ms3crosslinksFlat <- assignXLinkClass(ms3crosslinksFlat)
@@ -1654,7 +1651,8 @@ summarizeProtData <- function(datTab) {
     matrixCounts <- as_tibble(matrixCounts)
     matrixCounts$Acc.1 <- accNames
     matrixCounts <- matrixCounts %>%
-        pivot_longer(cols = -Acc.1, names_to = "Acc.2", values_to = "counts")
+        pivot_longer(cols = -Acc.1, names_to = "Acc.2", values_to = "counts") %>%
+        mutate(counts = ifelse(counts==0, NA, counts))
     return(matrixCounts)
 }
 
@@ -1684,20 +1682,21 @@ summarizeModuleData <- function(datTab) {
     matrixCounts <- as_tibble(matrixCounts)
     matrixCounts$Module.1 <- modNames
     matrixCounts <- matrixCounts %>%
-        pivot_longer(cols = -Module.1, names_to = "Module.2", values_to = "counts")
+        pivot_longer(cols = -Module.1, names_to = "Module.2", values_to = "counts") %>%
+        mutate(counts = ifelse(counts==0, NA, counts))
     return(matrixCounts)
 }
 
-summaryPlot <- function(summarizedData) {
-    accPlot <- summarizedData %>% 
-        ggplot(aes(Acc.1, Acc.2, size=counts, col=counts)) + 
-        geom_point(na.rm=T) +
-        scale_size(range = c(-1, 12)) +
-        scale_color_viridis_c(option="D") +
-        theme_bw() + 
-        theme(axis.text.x = element_text(angle=90, hjust=1))
-    print(accPlot)
-}
+# summaryPlot <- function(summarizedData) {
+#     accPlot <- summarizedData %>% 
+#         ggplot(aes(Acc.1, Acc.2, size=counts, col=counts)) + 
+#         geom_point(na.rm=T) +
+#         scale_size(range = c(-1, 12)) +
+#         scale_color_viridis_c(option="D") +
+#         theme_bw() + 
+#         theme(axis.text.x = element_text(angle=90, hjust=1))
+#     print(accPlot)
+# }
 
 clearAboveDiag <- function(sqMatrix) {
     n <- dim(sqMatrix)[1]
