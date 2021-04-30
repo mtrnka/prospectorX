@@ -723,13 +723,12 @@ buildClassifierMS3 <- function(datTab) {
 }
 
 generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectrum, 
-                                 instrumentType = NA, outputType = "HTML") {
+                                 instrumentType = NA, linkType = NA, outputType = "HTML") {
     if(!str_detect(fraction, "\\.[[a-z]]+$")) {
         fraction <- paste0(fraction, ".mgf")
     }
     if (is.na(instrumentType)) {
         instrumentType <- switch(
-            #        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
             str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
             "ESI-Q-high-res",
             ethcd = "ESI-EThcD-high-res",
@@ -737,7 +736,16 @@ generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectr
             hcd = "ESI-Q-high-res" #Add other instrument types
         )
     }
-    linkType <- str_extract(peptide.1, "(?<=\\(\\+).+?(?=\\)([[A-Z]]|$|-))")
+    if (is.na(linkType)) {
+        linkType <- str_extract(peptide.1, "(?<=\\(\\+).+?(?=\\)([[A-Z]]|$|-))")
+    } else if (linkType == "DSSOms3") {
+        peptide.1 <- str_replace(peptide.1, 
+                                 "XL:A-[[A-Z]][[a-z]]+(\\(Unsaturated\\))?",
+                                 fixed("+DSSO*"))
+        peptide.2 <- str_replace(peptide.2, 
+                                 "XL:A-[[A-Z]][[a-z]]+(\\(Unsaturated\\))?",
+                                 fixed("+DSSO*"))
+    }
     templateVals["output_type"] <- outputType
     templateVals["data_filename"] <- file.path(path, fraction)
     templateVals["instrument_name"] <- instrumentType
@@ -765,12 +773,13 @@ generateMSViewerLink.ms3 <- function(path, fraction, z, peptide, spectrum,
     }
     if (is.na(instrumentType)) {
         instrumentType <- switch(
-            #        str_extract(fraction, "(?<=FTMSms2)[[a-zA-Z]]+"),
             str_extract(fraction, "[[a-z]]+(?=\\.[[a-z]]+$)"),
             "ESI-Q-high-res",
             ethcd = "ESI-EThcD-high-res",
             etd = "ESI-ETD-high-res",
-            hcd = "ESI-Q-high-res" #Add other instrument types
+            hcd = "ESI-Q-high-res",
+            cid = "ESI-ION-TRAP-low-res"
+            #Add other instrument types
         )
     }
     templateVals.ms3["output_type"] <- outputType
@@ -886,16 +895,18 @@ formatXLTable <- function(datTab) {
             select(-any_of("distance"))
     }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
-    datTab <- datTab %>% select(any_of(c("keep", "specMS2", "specMS3.1", "specMS3.2", 
-                                         "xlinkedResPair", "xlinkedProtPair", "xlinkedModulPair",
-                                "SVM.score", "SVM.new", "distance", "m.z", "z", "ppm",
-                                "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
-                                "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
-                                "XLink.AA.1", "Protein.1", "Module.1", "Species.1",
-                                "Acc.2", "XLink.AA.2", "Protein.2", "Module.2", "Species.2",
-                                "xlinkClass", "Len.Pep.1", "Len.Pep.2",
-                                "Peptide.1", "Peptide.2", "numCSM", "numPPSM", "numMPSM",
-                                "Fraction", "RT", "MSMS.Info", "id")))
+    datTab <- datTab %>% select(any_of(c(
+        "keep", "specMS2", "specMS3.1", "specMS3.2", 
+        "xlinkedResPair", "xlinkedProtPair", "xlinkedModulPair",
+        "SVM.score", "SVM.new", "distance", "m.z", "z", "ppm",
+        "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
+        "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
+        "XLink.AA.1", "Protein.1", "Module.1", "Species.1",
+        "Acc.2", "XLink.AA.2", "Protein.2", "Module.2", "Species.2",
+        "xlinkClass", "Len.Pep.1", "Len.Pep.2",
+        "Peptide.1", "Peptide.2", "numCSM", "numPPSM", "numMPSM",
+        "Fraction", "RT", "MSMS.Info", "id")
+    ))
     if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
                                     Protein.2 = factor(Protein.2))
