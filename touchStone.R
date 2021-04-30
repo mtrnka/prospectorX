@@ -733,7 +733,9 @@ generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectr
             "ESI-Q-high-res",
             ethcd = "ESI-EThcD-high-res",
             etd = "ESI-ETD-high-res",
-            hcd = "ESI-Q-high-res" #Add other instrument types
+            hcd = "ESI-Q-high-res",
+            cid = "ESI-ION-TRAP-low-res"
+            #Add other instrument types
         )
     }
     if (is.na(linkType)) {
@@ -745,6 +747,7 @@ generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectr
         peptide.2 <- str_replace(peptide.2, 
                                  "XL:A-[[A-Z]][[a-z]]+(\\(Unsaturated\\))?",
                                  fixed("+DSSO*"))
+        linkType <- "DSSO*"
     }
     templateVals["output_type"] <- outputType
     templateVals["data_filename"] <- file.path(path, fraction)
@@ -896,7 +899,7 @@ formatXLTable <- function(datTab) {
     }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
     datTab <- datTab %>% select(any_of(c(
-        "keep", "specMS2", "specMS3.1", "specMS3.2", 
+        "keep", "Fraction.ms2", "specMS2", "specMS3.1", "specMS3.2", 
         "xlinkedResPair", "xlinkedProtPair", "xlinkedModulPair",
         "SVM.score", "SVM.new", "distance", "m.z", "z", "ppm",
         "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",

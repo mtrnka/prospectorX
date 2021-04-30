@@ -145,15 +145,16 @@ function(input, output, session) {
     if (input$experimentType == "ms3") {
       ms3Files <- parseFilePaths(exDir, input$ms3pkls)$datapath
       ms2Files <- parseFilePaths(exDir, input$ms2pkls)$datapath
-      names(ms2Files) <- ms3Files
-      ms2Files <- unique(ms2Files)
+      ms3Files <- map_chr(ms3Files, function(x) str_replace(basename(x), ".mgf" ,""))
+      names(ms2Files) <- map_chr(ms3Files, function(x) str_replace(basename(x), "\\.(txt|mgf)$" , ""))
       datTab <- datTab %>%
         mutate(Fraction.ms2 = map_chr(Fraction, function(x) ms2Files[x]),
-               specMS3.1 = pmap_chr(list(msvFiles, Fraction, z.1, Peptide.1, MSMS.Info.1), generateMSViewerLink.ms3),
-               specMS3.2 = pmap_chr(list(msvFiles, Fraction, z.2, Peptide.2, MSMS.Info.2), generateMSViewerLink.ms3),
-               specMS2 = pmap_chr(list(msvFiles, Fraction.ms2, z, Peptide.1, Peptide.2,
-                                    MSMS.Info, linkType="DSSOms3"), generateMSViewerLink)
-        )
+               specMS3.1 = pmap_chr(list(msvFiles, Fraction, z.1, Peptide.1, 
+                                         MSMS.Info.1), generateMSViewerLink.ms3),
+               specMS3.2 = pmap_chr(list(msvFiles, Fraction, z.2, Peptide.2, 
+                                         MSMS.Info.2), generateMSViewerLink.ms3),
+               specMS2 = pmap_chr(list(dirname(Fraction.ms2), basename(Fraction.ms2), z, Peptide.1, Peptide.2,
+                                       MSMS.Info, linkType="DSSOms3"), generateMSViewerLink))
     } else {
       datTab <- datTab %>%
         mutate(specMS2 = pmap_chr(list(msvFiles, Fraction, z, Peptide.1, Peptide.2,
