@@ -605,7 +605,7 @@ function(input, output, session) {
       })}
     percentMatched <- getPercentMatched(ms.product.info)
     datTab <- cbind(datTab, percentMatched)
-    datTab <- buildClassifierExperimental(datTab, params.best, "SVM.new")
+    datTab <- buildClassifier(datTab, params.best, "SVM.new")
     scResults(datTab)
   })
 
