@@ -589,21 +589,20 @@ function(input, output, session) {
     }
     if (input$experimentType == "ms3") {
     } else {
-      
-      #    withProgress(message = "scraping MS-Product", value = 0, {
-      #      numPoints <- nrow(datTab)
-      ms.product.info <-
-        pmap_chr(list(msvFiles, datTab$Fraction, datTab$z, datTab$Peptide.1, 
-                      datTab$Peptide.2, datTab$MSMS.Info, instrumentType,
-                      "Tab delimited text"), generateMSViewerLink) %>%
-        map_future(function(msvLink) {
-          spec.html <- xml2::read_html(msvLink)
-          spec.node <- rvest::html_node(spec.html, xpath = '//*[@id="centerbody"]')
-          spec.table <- read_tsv(rvest::html_text(spec.node))
-          #          incProgress(1/numPoints)
-          return(spec.table)
-        })
-    }
+      withProgress(message = "scraping MS-Product", value = 0, {
+        numPoints <- nrow(datTab)
+        ms.product.info <-
+          pmap_chr(list(msvFiles, datTab$Fraction, datTab$z, datTab$Peptide.1, 
+                        datTab$Peptide.2, datTab$MSMS.Info, instrumentType,
+                        outputType="Tab delimited text"), generateMSViewerLink) %>%
+          future_map(function(msvLink) {
+            spec.html <- xml2::read_html(msvLink)
+            spec.node <- rvest::html_node(spec.html, xpath = '//*[@id="centerbody"]')
+            spec.table <- read_tsv(rvest::html_text(spec.node))
+            incProgress(1/numPoints)
+            return(spec.table)
+          })
+      })}
     percentMatched <- getPercentMatched(ms.product.info)
     datTab <- cbind(datTab, percentMatched)
     datTab <- buildClassifierExperimental(datTab, params.best, "SVM.new")

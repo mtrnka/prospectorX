@@ -1063,6 +1063,33 @@ createMasterScanFile <- function(ms3PAVApeaklist,
     return(masterScans)
 }
 
+createMasterScanFile2 <- function(ms2PAVApeaklistCID=NA,
+                                 ms2PAVApeaklistETD=NA) {
+   #Peaklists need to be pava generated. Can take vector input.
+   numFiles <- length(ms2PAVApeaklistCID)
+   if (numFiles != length(ms2PAVApeaklistETD)) {
+      stop("Different numbers of MS2 files provided")
+   }
+   masterScans <- list()
+   for (i in 1:numFiles) {
+      ms2masterscansCID <- getIndicesForFile(ms2PAVApeaklistCID[i])
+      if (!is.na(ms2PAVApeaklistETD[i])) {
+         ms2masterscansETD <- getIndicesForFile(ms2PAVApeaklistETD[i])
+         ms2masterscans <- full_join(ms2masterscansCID, ms2masterscansETD,
+                                     by=c("masterScanNo", "pepmass","charge"))
+         names(ms2masterscans) <- c("ms2cidScanNo", "ms1MasterScanNo",
+                                    "pepmass.ms2", "charge.ms2", "ms2etdScanNo")
+         ms2masterscans <- ms2masterscans[,c(2,1,5,3,4)]
+      }
+      fract <- str_replace(basename(ms2PAVApeaklistCID[i]), "\\.(txt|mgf)$", "")
+      ms2masterscans$fraction <- fract
+      masterScans[[fract]] <- ms2masterscans
+   }
+   masterScans <- do.call(rbind, masterScans)
+   return(masterScans)
+}
+
+
 readMS3results <- function(ms3SearchTable){
     ms3results <- read_tsv(ms3SearchTable, skip=2) %>% 
         select(c("DB Peptide", "Peptide", "Protein Mods",
