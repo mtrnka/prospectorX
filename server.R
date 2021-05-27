@@ -589,8 +589,8 @@ function(input, output, session) {
     }
     if (input$experimentType == "ms3") {
     } else {
-      withProgress(message = "scraping MS-Product", value = 0, {
-        numPoints <- nrow(datTab)
+#      withProgress(message = "scraping MS-Product", value = 0, {
+#        numPoints <- nrow(datTab)
         ms.product.info <-
           pmap_chr(list(msvFiles, datTab$Fraction, datTab$z, datTab$Peptide.1, 
                         datTab$Peptide.2, datTab$MSMS.Info, instrumentType,
@@ -599,10 +599,10 @@ function(input, output, session) {
             spec.html <- xml2::read_html(msvLink)
             spec.node <- rvest::html_node(spec.html, xpath = '//*[@id="centerbody"]')
             spec.table <- read_tsv(rvest::html_text(spec.node))
-            incProgress(1/numPoints)
+#            incProgress(1/numPoints)
             return(spec.table)
           })
-      })}
+      }#)}
     percentMatched <- getPercentMatched(ms.product.info)
     datTab <- cbind(datTab, percentMatched)
     datTab <- buildClassifier(datTab, params.best, "SVM.new")

@@ -833,6 +833,7 @@ readMSProductInfo <- function(datTab) {
 getPercentMatched <- function(ms.product.info) {
     intensities <- map_dfr(ms.product.info, function(x) {
         matchedIntensity <- sum((!is.na(x$`Peptide #`)) * x$Intensity, na.rm=T)
+        maxMatched <- max((!is.na(x$`Peptide #`)) * x$Intensity, na.rm=T)
         totalIntensity <- sum(x$Intensity, na.rm=T)
         percentMatched <- matchedIntensity / totalIntensity
         sums <- x %>% group_by(`Peptide #`) %>%
@@ -847,6 +848,15 @@ getPercentMatched <- function(ms.product.info) {
             filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "2") %>% 
             pull(Intensity) %>% 
             sum(na.rm=T) / totalIntensity
+        sums$percMaxDiag.pep1 <- x %>% 
+            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "1") %>% 
+            pull(Intensity) %>% 
+            sum(na.rm=T) / maxMatched
+        sums$percMaxDiag.pep2 <- x %>% 
+            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "2") %>% 
+            pull(Intensity) %>% 
+            sum(na.rm=T) / maxMatched
+        
         return(sums)
     })
     replaceVals <- rep(0.0, ncol(intensities))
