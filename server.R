@@ -77,25 +77,29 @@ function(input, output, session) {
     if (!is.integer(input$clmsData)) {
       if (input$experimentType == "ms3") {
         if (!is.integer(input$ms2pkls) & !is.integer(input$ms3pkls)) {
-        inFile <- parseFilePaths(exDir, input$clmsData)
-        ms3Files <- parseFilePaths(exDir, input$ms3pkls)$datapath
-        ms2Files <- parseFilePaths(exDir, input$ms2pkls)$datapath
-        masterScanFile <- createMasterScanFile(ms3Files, ms2Files)
-        searchCompareMS3 <- readMS3results(inFile$datapath)
-        searchCompareMS3 <- addMasterScanInfo(searchCompareMS3, masterScanFile)
-        scTable <- processMS3xlinkResults(searchCompareMS3)
-        scTable <- scTable %>% mutate(SVM.score = Score.Diff / 10)
-        consoleMessage("*** Loading Search Compare File ***")
-        return(scTable)
+          inFile <- parseFilePaths(exDir, input$clmsData)
+          ms3Files <- parseFilePaths(exDir, input$ms3pkls)$datapath
+          ms2Files <- parseFilePaths(exDir, input$ms2pkls)$datapath
+          masterScanFile <- createMasterScanFile(ms3Files, ms2Files)
+          searchCompareMS3 <- readMS3results(inFile$datapath)
+          searchCompareMS3 <- addMasterScanInfo(searchCompareMS3, masterScanFile)
+          scTable <- processMS3xlinkResults(searchCompareMS3)
+          scTable <- scTable %>% mutate(SVM.score = Score.Diff / 10)
+          consoleMessage("*** Loading Search Compare File ***")
+          return(scTable)
         }
       }
       else {
-      inFile <- parseFilePaths(exDir, input$clmsData)
-      consoleMessage("*** Loading Search Compare File ***")
-      scTable <- readProspectorXLOutput(inFile$datapath)
-      consoleMessage("*** Building SVM Classifier ***")
-      scTable <- buildClassifier(scTable)
-      return(scTable)
+        inFile <- parseFilePaths(exDir, input$clmsData)
+        consoleMessage("*** Loading Search Compare File ***")
+        scTable <- readProspectorXLOutput(inFile$datapath)
+        consoleMessage("*** Building SVM Classifier ***")
+        if ("percMatched" %in% names(scTable)) {
+          scTable <- buildClassifier(scTable, params.best)
+        } else {
+          scTable <- buildClassifier(scTable, defaultParams)
+        }
+        return(scTable)
       }
     }
   })
@@ -602,10 +606,11 @@ function(input, output, session) {
 #            incProgress(1/numPoints)
             return(spec.table)
           })
-      }#)}
+    }#)}
     percentMatched <- getPercentMatched(ms.product.info)
     datTab <- cbind(datTab, percentMatched)
     datTab <- buildClassifier(datTab, params.best, "SVM.new")
+    datTab$SVM.score <- datTab$SVM.new
     scResults(datTab)
   })
 

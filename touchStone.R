@@ -344,9 +344,11 @@ assignXLinkClass <- function(searchTable) {
  }
 
 calculatePercentMatched <- function(searchTable) {
-    if ("Num.Pks" %in% names(searchTable) & "Num.Unmat" %in% names(searchTable)) {
-    num.Matched <- searchTable$Num.Pks - searchTable$Num.Unmat
-    searchTable$percMatch <- num.Matched / searchTable$Num.Pks
+    if ("Match.Int" %in% names(searchTable)) {
+        searchTable$percMatched <- searchTable$Match.Int
+    } else if ("Num.Pks" %in% names(searchTable) & "Num.Unmat" %in% names(searchTable)) {
+        num.Matched <- searchTable$Num.Pks - searchTable$Num.Unmat
+        searchTable$percMatch <- num.Matched / searchTable$Num.Pks
     }
     return(searchTable)
 }
@@ -831,6 +833,7 @@ readMSProductInfo <- function(datTab) {
 }
 
 getPercentMatched <- function(ms.product.info) {
+    diagnosticRegEx <- "^(MH[[\\*\\#]]|P\\+LK?|P$)"
     intensities <- map_dfr(ms.product.info, function(x) {
         matchedIntensity <- sum((!is.na(x$`Peptide #`)) * x$Intensity, na.rm=T)
         maxMatched <- max((!is.na(x$`Peptide #`)) * x$Intensity, na.rm=T)
@@ -841,19 +844,19 @@ getPercentMatched <- function(ms.product.info) {
             pivot_wider(names_from = `Peptide #`, values_from = percIntensity, names_prefix = "percInt.pep")
         sums$percMatched <- percentMatched
         sums$percDiag.pep1 <- x %>% 
-            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "1") %>% 
+            filter(str_detect(`Ion Type`, diagnosticRegEx), `Peptide #` == "1") %>% 
             pull(Intensity) %>% 
             sum(na.rm=T) / totalIntensity
         sums$percDiag.pep2 <- x %>% 
-            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "2") %>% 
+            filter(str_detect(`Ion Type`, diagnosticRegEx), `Peptide #` == "2") %>% 
             pull(Intensity) %>% 
             sum(na.rm=T) / totalIntensity
         sums$percMaxDiag.pep1 <- x %>% 
-            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "1") %>% 
+            filter(str_detect(`Ion Type`, diagnosticRegEx), `Peptide #` == "1") %>% 
             pull(Intensity) %>% 
             sum(na.rm=T) / maxMatched
         sums$percMaxDiag.pep2 <- x %>% 
-            filter(str_detect(`Ion Type`, "^MH[[\\*\\#]]"), `Peptide #` == "2") %>% 
+            filter(str_detect(`Ion Type`, diagnosticRegEx), `Peptide #` == "2") %>% 
             pull(Intensity) %>% 
             sum(na.rm=T) / maxMatched
         
@@ -915,8 +918,8 @@ formatXLTable <- function(datTab) {
     datTab <- datTab %>% select(any_of(c(
         "keep", "specMS2", "specMS3.1", "specMS3.2", 
         "xlinkedResPair", "xlinkedProtPair", "xlinkedModulPair",
-        "SVM.score", "SVM.new", "distance", "m.z", "z", "ppm",
-        "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff",
+        "SVM.score", "SVM.new", "distance", "m/z", "z", "ppm",
+        "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff", "percMatched",
         "Sc.1", "Rk.1", "Sc.2", "Rk.2", "Acc.1",
         "XLink.AA.1", "Protein.1", "Module.1", "Species.1",
         "Acc.2", "XLink.AA.2", "Protein.2", "Module.2", "Species.2",
@@ -947,7 +950,7 @@ formatXLTable <- function(datTab) {
         datTab$Fraction <- gsub("(.*)\\.[^.]+$", "\\1", datTab$Fraction)
         datTab <- datTab %>% mutate(Fraction = factor(Fraction))
     }
-    if ("percMatch" %in% names(datTab)) {
+    if ("percMatched" %in% names(datTab)) {
         datTab$percMatch <- round(datTab$percMatch * 100, 2)
     }
     if ("Rk.1" %in% names(datTab) & "Rk.2" %in% names(datTab)) {
@@ -1715,15 +1718,21 @@ summarizeProtData <- function(datTab) {
     return(matrixCounts)
 }
 
-summarizeModuleData <- function(datTab) {
+summarizeModuleData <- function(datTab, modOrder = NULL) {
     datTab <- datTab %>% 
         filter(Decoy=="Target") %>%
         mutate(Module.1 = fct_explicit_na(Module.1, "other"),
                Module.2 = fct_explicit_na(Module.2, "other"))
-    datTab[c("Module.1", "Module.2")] <- datTab %>% 
-        select(Module.1, Module.2) %>% 
-        fct_unify %>% 
-        bind_cols
+    if (is.null(modOrder)) {
+       datTab[c("Module.1", "Module.2")] <- datTab %>% 
+          select(Module.1, Module.2) %>% 
+          fct_unify %>% 
+          bind_cols
+    } else {
+       datTab <- datTab %>%
+          mutate(Module.1 = fct_relevel(Module.1, modOrder),
+                 Module.2 = fct_relevel(Module.2, modOrder))
+    }
     datTab <- bestResPair(datTab)
     matrixCounts <- datTab %>%
         group_by(Module.1, Module.2) %>%
@@ -1743,6 +1752,11 @@ summarizeModuleData <- function(datTab) {
     matrixCounts <- matrixCounts %>%
         pivot_longer(cols = -Module.1, names_to = "Module.2", values_to = "counts") %>%
         mutate(counts = ifelse(counts==0, NA, counts))
+    if (!is.null(modOrder)) {
+       matrixCounts <- matrixCounts %>% 
+          mutate(Module.1 = fct_relevel(Module.1, modOrder),
+                 Module.2 = fct_relevel(Module.2, modOrder))
+    }
     return(matrixCounts)
 }
 
