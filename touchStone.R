@@ -248,7 +248,7 @@ assignModules <- function(datTab, moduleFile) {
         mutate(xlinkedModulPair = ifelse(Module.1 <= Module.2,
                                          str_c(Module.1, Module.2, sep="::"),
                                          str_c(Module.2, Module.1, sep="::"))
-        ) %>% 
+        ) %>%
         mutate(xlinkedModulPair = as_factor(xlinkedModulPair),
                Module.1 = factor(Module.1, levels = mods),
                Module.2 = factor(Module.2, levels = mods),
@@ -319,6 +319,14 @@ calculatePairs <- function(searchTable){
     searchTable <- searchTable %>% add_count(xlinkedResPair, name="numCSM")
     searchTable <- searchTable %>% add_count(xlinkedProtPair, name="numPPSM")
     return(searchTable)
+}
+
+countSMs <- function(searchTable) {
+    searchTable <- searchTable %>% add_count(xlinkedResPair, name="numCSM")
+    searchTable <- searchTable %>% add_count(xlinkedProtPair, name="numPPSM")
+    if ("xlinkedModulPair" %in% names(searchTable)) {
+        searchTable <- searchTable %>% add_count(xlinkedModulPair, name="numMPSM")
+    }
 }
 
 assignXLinkClass <- function(searchTable) {
@@ -439,7 +447,7 @@ generateErrorTable <- function(datTab, classifier="SVM.score",
     # } else if (classifier=="Score.Diff") {
     #     range.spacing = 0.25
     # } else {
-    range.spacing = abs(class.max - class.min) / 200
+    range.spacing = abs(class.max - class.min) / 500
     # }
     class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
     error.rates <- unlist(lapply(class.range, function(threshold) {
@@ -951,7 +959,7 @@ formatXLTable <- function(datTab) {
         datTab <- datTab %>% mutate(Fraction = factor(Fraction))
     }
     if ("percMatched" %in% names(datTab)) {
-        datTab$percMatch <- round(datTab$percMatch * 100, 2)
+        datTab$percMatched <- round(datTab$percMatched, 2)
     }
     if ("Rk.1" %in% names(datTab) & "Rk.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Rk.1 = as.integer(Rk.1), 
@@ -1601,7 +1609,7 @@ bestResPairFraction <- function(datTab, classifier=classifier) {
 }
 
 massErrorPlot <- function(massErrors, lowThresh, highThresh, lowPlotRange, highPlotRange) {
-    if (abs(lowPlotRange) < 10 & abs(highPlotRange) < 10) {
+    if (abs(lowPlotRange) <= 10 & abs(highPlotRange) <= 10) {
         binw <- 0.5
     } else {
         binw <- 1

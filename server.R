@@ -94,7 +94,9 @@ function(input, output, session) {
         consoleMessage("*** Loading Search Compare File ***")
         scTable <- readProspectorXLOutput(inFile$datapath)
         consoleMessage("*** Building SVM Classifier ***")
-        if ("percMatched" %in% names(scTable)) {
+        if ("SVM.score" %in% names(scTable)) {
+          return(scTable)
+        } else if ("percMatched" %in% names(scTable)) {
           scTable <- buildClassifier(scTable, params.best)
         } else {
           scTable <- buildClassifier(scTable, defaultParams)
