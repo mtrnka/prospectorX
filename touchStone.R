@@ -201,6 +201,9 @@ readModuleFile <- function(pathToModFile) {
             }
         )
     }
+    modFile <- modFile %>% 
+        select(Acc, Protein.name, Module, first.AA, last.AA,
+               any_of(c("PDB.code", "PDB.chain")))
     return(modFile)
 }
 
@@ -261,7 +264,7 @@ assignModules <- function(datTab, moduleFile) {
                                 PDB.code.1, NA)
             )
     }
-    if (!is.null(datTabList$Decoy)) {
+    if (length(datTabList) == 2) {
         datTab.decoy <- datTabList$Decoy
         decoyLength <- nrow(datTab.decoy)
         colsToAdd <- setdiff(names(datTab.target), names(datTab.decoy))
@@ -277,7 +280,7 @@ assignModules <- function(datTab, moduleFile) {
 processModuleFile <- function(datTab, pathToModFile, pdbFileDir = getwd()) {
     modFile <- readModuleFile(pathToModFile)
     datTab <- assignModules(datTab, modFile)
-    if ("PDB.code" %in% names(modFile) & sum(!is.na(modFile$PDB.chain) > 0)) {
+    if ("PDB.code" %in% names(modFile) & sum(!is.na(modFile$PDB) > 0)) {
         pdbFiles <- gatherPDBs(modFile, pdbFileDir = pdbFileDir)
         datTab <- measureCrosslinkDistance(datTab, pdbFiles)
     }
