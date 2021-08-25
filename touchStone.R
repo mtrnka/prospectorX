@@ -261,14 +261,16 @@ assignModules <- function(datTab, moduleFile) {
                                 PDB.code.1, NA)
             )
     }
-    datTab.decoy <- datTabList$Decoy
-    decoyLength <- nrow(datTab.decoy)
-    colsToAdd <- setdiff(names(datTab.target), names(datTab.decoy))
-    emptyCols <- matrix(nrow=decoyLength, ncol=length(colsToAdd)) 
-    colnames(emptyCols) <- colsToAdd
-    emptyCols <- as_tibble(emptyCols)
-    datTab.decoy <- bind_cols(datTab.decoy, emptyCols)
-    datTab <- bind_rows(datTab.target, datTab.decoy)
+    if (!is.null(datTabList$Decoy)) {
+        datTab.decoy <- datTabList$Decoy
+        decoyLength <- nrow(datTab.decoy)
+        colsToAdd <- setdiff(names(datTab.target), names(datTab.decoy))
+        emptyCols <- matrix(nrow=decoyLength, ncol=length(colsToAdd)) 
+        colnames(emptyCols) <- colsToAdd
+        emptyCols <- as_tibble(emptyCols)
+        datTab.decoy <- bind_cols(datTab.decoy, emptyCols)
+        datTab <- bind_rows(datTab.target, datTab.decoy)
+    }
     return(datTab)
 }
 
