@@ -280,7 +280,7 @@ assignModules <- function(datTab, moduleFile) {
 processModuleFile <- function(datTab, pathToModFile, pdbFileDir = getwd()) {
     modFile <- readModuleFile(pathToModFile)
     datTab <- assignModules(datTab, modFile)
-    if ("PDB.code" %in% names(modFile) & sum(!is.na(modFile$PDB) > 0)) {
+    if ("PDB.code" %in% names(modFile) & sum(!is.na(datTab$PDB) > 0)) {
         pdbFiles <- gatherPDBs(modFile, pdbFileDir = pdbFileDir)
         datTab <- measureCrosslinkDistance(datTab, pdbFiles)
     }
