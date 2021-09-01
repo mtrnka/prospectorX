@@ -1788,6 +1788,7 @@ clearAboveDiag <- function(sqMatrix) {
     n <- dim(sqMatrix)[1]
     m <- dim(sqMatrix)[2]
     if (n != m) return("only works for square matrices")
+    if (n == 1) return(sqMatrix)
     a <- 1 + (1:n-1)*n
     b <- (1:n-1)*(n+1)
     abovePositions <- unlist(map2(a, b, seq)[2:n])

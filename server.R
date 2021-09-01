@@ -97,7 +97,11 @@ function(input, output, session) {
         if ("SVM.score" %in% names(scTable)) {
           return(scTable)
         } else if ("percMatched" %in% names(scTable)) {
-          scTable <- buildClassifier(scTable, params.best)
+          scTable <- tryCatch(buildClassifier(scTable, params.best),
+                              error=function(cond) {message(str_c("buildClassifierError", cond))
+                                buildClassifier(scTable, defaultParams)
+                              }
+          )
         } else {
           scTable <- buildClassifier(scTable, defaultParams)
         }
