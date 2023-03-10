@@ -60,7 +60,7 @@ msms_min_precursor_mass=0&
 instrument_name=ESI-EThcD-high-res&display_graph=1&
 msms_parent_mass_tolerance=10&
 msms_parent_mass_tolerance_units=ppm&
-fragment_masses_tolerance=20&
+fragment_masses_tolerance=30&
 fragment_masses_tolerance_units=ppm&
 msms_pk_filter=Max%20MSMS%20Pks&
 msms_max_peaks=100&

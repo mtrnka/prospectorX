@@ -99,7 +99,7 @@ fluidPage(
                                             step = 1, value = c(4, 30))
                          ),
                          column(6,
-                                sliderInput("ms1MassError", "Prec Mass Error", min = -20, max = 20,
+                                sliderInput("ms1MassError", "Prec Mass Error", min = -25, max = 25,
                                             step = 0.5, value = c(-25, 25)),
                                 br(),
                                 uiOutput("distanceSlider")

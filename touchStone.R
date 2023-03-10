@@ -2,6 +2,7 @@ print("touchStone module loaded")
 
 readProspectorXLOutput <- function(inputFile, minPepLen = 3, minPepScore = 0, minScoreDiff = 0){
    dataTable <- read_tsv(inputFile)
+   dataTable <- dataTable %>% select(-starts_with("%"))
    header <- names(dataTable) %>%
       str_replace("_[[0-9]]$", "") %>%
       str_replace_all("[[:space:]]",".") %>%
@@ -875,11 +876,6 @@ buildClassifier <- function(datTab, params=params.best, scoreName="SVM.score") {
     if (cor(datTab$Score.Diff, datTab[[scoreName]]) < 0) {
         datTab[[scoreName]] <- -1 * datTab[[scoreName]]
     }
-    # meanT <- mean(datTab[[scoreName]][datTab$Decoy2=="Target"],na.rm=T)
-    # meanD <- mean(datTab[[scoreName]][datTab$Decoy2=="Decoy"],na.rm=T)
-    # if (meanT < meanD) {
-    #     datTab[[scoreName]] <- -1 * datTab[[scoreName]]
-    # }
     tab <- table(datTab$Decoy2, datTab[[scoreName]] > 0)
     print(tab)
     print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))

@@ -32,7 +32,8 @@ function(input, output, session) {
       str_c(parseFilePaths(exDir, input$clmsData)$name)
     },
     content = function(file) {
-      write_tsv(xlTable(), file)
+      combined <- bind_rows(xlTable(), xlTableDecoy())
+      write_tsv(combined, file)
     }
   )
  
