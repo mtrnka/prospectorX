@@ -139,7 +139,7 @@ function(input, output, session) {
     msvFiles <- list.dirs(dirname(msvFilePath), recursive = F)
     btName <- dirname(dirname(msvFilePath))
     btNameDir <- dirname(btName)
-    btParamFile <- dir(btNameDir, str_c(basename(btName), ".xml"))
+    btParamFile <- dir(btNameDir, str_c("^", basename(btName), ".xml"))
     if (length(btParamFile) > 0) {
       btParams <- readParamsFile(file.path(btNameDir, btParamFile))
     } else {

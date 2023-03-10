@@ -1,40 +1,62 @@
 print("touchStone module loaded")
 
-readProspectorXLOutput <- function(inputFile){
-    dataTable <- read_tsv(inputFile)
-    header <- names(dataTable) %>%
-        str_replace("_[[0-9]]$", "") %>%
-        str_replace_all("[[:space:]]",".") %>%
-        str_replace_all("#", "Num")
-    acc_pos <- str_which(header, "Acc")
-    header[acc_pos] <- c("Acc.1", "Acc.2")
-    spec_pos <- str_which(header, "Species")
-    header[spec_pos] <- c("Species.1", "Species.2")
-    prot_pos <- str_which(header, "Protein.Name")
-    header[prot_pos] <- c("Protein.1", "Protein.2")
-    if ("Protein.MW" %in% header) {
-        mw_pos <- str_which(header, "Protein.MW")
-        header[mw_pos] <- c("MW.1", "MW.2")
-    }
-    if ("Protein.Length" %in% header) {
-        len_pos <- str_which(header, "Protein.Length")
-        header[len_pos] <- c("Protein.len.1", "Protein.len.2")
-    }
-    names(dataTable) <- header
-    if (!"Spectrum" %in% names(dataTable)) {
-        dataTable$Spectrum <- 1
-    }
-    if (!"distance" %in% names(dataTable)) {
-        dataTable$distance <- NA_real_
-    }
-    dataTable <- calculateDecoys(dataTable)
-    dataTable <- calculatePairs(dataTable)
-    dataTable <- assignXLinkClass(dataTable)
-    dataTable <- calculatePercentMatched(dataTable)
-    dataTable <- calculatePeptideLengths(dataTable)
-    dataTable <- lengthFilter(dataTable, minLen = 3, maxLen = 35)
-    dataTable <- scoreFilter(dataTable, minScore = 0)
-    return(dataTable)
+readProspectorXLOutput <- function(inputFile, minPepLen = 3, minPepScore = 0, minScoreDiff = 0){
+   dataTable <- read_tsv(inputFile)
+   header <- names(dataTable) %>%
+      str_replace("_[[0-9]]$", "") %>%
+      str_replace_all("[[:space:]]",".") %>%
+      str_replace_all("#", "Num") %>%
+      str_replace_all("%", "Perc")
+   acc_pos <- str_which(header, "Acc")
+   header[acc_pos] <- c("Acc.1", "Acc.2")
+   spec_pos <- str_which(header, "Species")
+   header[spec_pos] <- c("Species.1", "Species.2")
+   prot_pos <- str_which(header, "Protein.Name")
+   header[prot_pos] <- c("Protein.1", "Protein.2")
+   if (sum(str_detect(header, "Protein.MW")) == 2) {
+      mw_pos <- str_which(header, "Protein.MW")
+      header[mw_pos] <- c("MW.1", "MW.2")
+   }
+   if (sum(str_detect(header, "Protein.Length")) == 2) {
+      len_pos <- str_which(header, "Protein.Length")
+      header[len_pos] <- c("Protein.len.1", "Protein.len.2")
+   }
+   if (sum(str_detect(header, "MSMS.Ions")) == 2) {
+      len_pos <- str_which(header, "MSMS.Ions")
+      header[len_pos] <- c("MSMS.Ions.1", "MSMS.Ions.2")
+   }
+   if (sum(str_detect(header, "MSMS.M/Zs")) == 2) {
+      len_pos <- str_which(header, "MSMS.M/Zs")
+      header[len_pos] <- c("MSMS.MZs.1", "MSMS.MZs.2")
+   }
+   if (sum(str_detect(header, "MSMS.Intensities")) == 2) {
+      len_pos <- str_which(header, "MSMS.Intensities")
+      header[len_pos] <- c("MSMS.Intensities.1", "MSMS.Intensities.2")
+   }
+   if (sum(str_detect(header, "MSMS.Errors")) == 2) {
+      len_pos <- str_which(header, "MSMS.Errors")
+      header[len_pos] <- c("MSMS.Errors.1", "MSMS.Errors.2")
+   }
+   if (sum(str_detect(header, "Perc.Bond.Cleavage")) == 2) {
+      len_pos <- str_which(header, "Perc.Bond.Cleavage")
+      header[len_pos] <- c("Perc.Bond.Cleavage.1", "Perc.Bond.Cleavage.2")
+   }
+   names(dataTable) <- header
+   if (!"Spectrum" %in% names(dataTable)) {
+      dataTable$Spectrum <- 1
+   }
+   if (!"distance" %in% names(dataTable)) {
+      dataTable$distance <- NA_real_
+   }
+   dataTable <- calculateDecoys(dataTable)
+   dataTable <- assignXLinkClass(dataTable)
+   dataTable <- calculatePercentMatched(dataTable)
+   dataTable <- calculatePeptideLengths(dataTable)
+   dataTable <- lengthFilter(dataTable, minLen = minPepLen, maxLen = 40)
+   dataTable <- scoreFilter(dataTable, minScore = minPepScore)
+   dataTable <- dataTable %>% filter(Score.Diff >= minScoreDiff)
+   dataTable <- calculatePairs(dataTable)
+   return(dataTable)
 }
 
 parsePDB <- function(pdbID=NA, pdbFileDir=getwd()) {
@@ -106,12 +128,41 @@ euclideanDistance <- function(XLink.AA.1, PDB.chain.1, XLink.AA.2, PDB.chain.2, 
 euclideanHelper <- function(datTab, parsedPDB) {
     if (!is.null(parsedPDB)) {
         datTabDist <- datTab %>%
-            mutate(distance = pmap_dbl(., euclideanDistance, parsedPDB))
+            mutate(distance = pmap_dbl(., euclideanDistanceMultimer, parsedPDB))
    } else {
        datTabDist <- datTab %>%
            mutate(distance = NA_real_)
    }
     return(datTabDist)
+}
+
+euclideanDistanceMultimer <- function(XLink.AA.1, PDB.chain.1, XLink.AA.2, PDB.chain.2, parsedPDB, ...) {
+   PDB.chain.1 <- str_remove_all(PDB.chain.1, "\\s+")
+   PDB.chain.2 <- str_remove_all(PDB.chain.2, "\\s+")
+   if (is.na(PDB.chain.1) | is.na(PDB.chain.2)) {
+      return(NA_real_)
+   } else {
+      distanceBox <- numeric()
+      index <- 1
+      for (chain1 in str_split(PDB.chain.1, ",")[[1]]) {
+         for (chain2 in str_split(PDB.chain.2, ",")[[1]]) {
+            coord1 <- parsedPDB[parsedPDB$chain==chain1 & parsedPDB$resno==XLink.AA.1,
+                                c("x","y","z")]
+            if (nrow(coord1)==0) coord1 <- NA
+            coord2 <- parsedPDB[parsedPDB$chain==chain2 & parsedPDB$resno==XLink.AA.2,
+                                c("x","y","z")]
+            if (nrow(coord2)==0) coord2 <- NA
+            distance <- sqrt(sum((coord1 - coord2)**2))
+            distanceBox[index] <- distance
+            index <- index + 1
+         }
+      }
+      if (sum(is.na(distanceBox)) == length(distanceBox)) {
+         return(NA)
+      } else {
+         return(round(min(distanceBox, na.rm=T), 2))
+      }
+   }
 }
 
 randomCrosslinks <- function(parsedPDB, numCrosslinks,
@@ -146,16 +197,28 @@ randomHelper <- function(datTab, parsedPDB, resType1="LYS", resType2="LYS", chai
 }
 
 measureCrosslinkDistance <- function(datTabMod, pdbList) {
-    nestedDatTabMod <- datTabMod %>% 
-        group_by(PDB) %>% 
-        nest() %>% 
-        mutate(parsedPDB = pdbList[PDB]) %>%
-        mutate(data=map2(data, parsedPDB, euclideanHelper)) %>%
-        mutate(data=map2(data, parsedPDB, randomHelper)) %>%
-        select(-parsedPDB) %>%
-        unnest(col=c(data, PDB)) %>%
-        ungroup() %>%
-        relocate(PDB, .after=PDB.chain.2)
+   nestedDatTabMod <- datTabMod %>% 
+      group_by(PDB) %>% 
+      nest() 
+   if (sum(is.na(nestedDatTabMod$PDB)) > 0) {
+      nestedDatTabNA <- nestedDatTabMod %>% 
+         filter(is.na(PDB)) %>%
+         unnest(col=c(data, PDB)) %>%
+         ungroup() %>%
+         mutate(random.distance = NA_real_)
+   } else {
+      nestedDatTabNA <- data.frame()
+   }
+      nestedDatTabMod <- nestedDatTabMod %>%
+         filter(!is.na(PDB)) %>%
+         mutate(parsedPDB = pdbList[PDB]) %>%
+         mutate(data=map2(data, parsedPDB, euclideanHelper)) %>%
+         mutate(data=map2(data, parsedPDB, randomHelper)) %>%
+         select(-parsedPDB) %>%
+         unnest(col=c(data, PDB)) %>%
+         ungroup()
+  bind_rows(nestedDatTabMod, nestedDatTabNA) %>%
+      relocate(PDB, .after=PDB.chain.2)
 }
 
 readModuleFile <- function(pathToModFile) {
@@ -273,6 +336,8 @@ assignModules <- function(datTab, moduleFile) {
         emptyCols <- as_tibble(emptyCols)
         datTab.decoy <- bind_cols(datTab.decoy, emptyCols)
         datTab <- bind_rows(datTab.target, datTab.decoy)
+    } else {
+       datTab <- datTab.target
     }
     return(datTab)
 }
@@ -304,26 +369,57 @@ calculateDecoys <- function(searchTable) {
 }
 
 calculatePairs <- function(searchTable){
-    searchTable$xlinkedProtPair <- ifelse(searchTable$Decoy2 == "Decoy",
-                                          ifelse(searchTable$Protein.1 <= searchTable$Protein.2,
-                                          paste("decoy", searchTable$Protein.1, searchTable$Protein.2, sep="::"),
-                                          paste("decoy", searchTable$Protein.2, searchTable$Protein.1, sep="::")),
-                                          ifelse(searchTable$Acc.1 <= searchTable$Acc.2,
-                                          paste(searchTable$Acc.1, searchTable$Acc.2, sep="::"),
-                                          paste(searchTable$Acc.2, searchTable$Acc.1, sep="::")))
-    accs <- unique(c(searchTable$Acc.1, searchTable$Acc.2)) %>% str_sort()
-    searchTable <- searchTable %>% mutate(Acc.1 = factor(Acc.1, levels = accs),
-                                          Acc.2 = factor(Acc.2, levels = accs))
-    searchTable$Res.1 <- paste(searchTable$XLink.AA.1, searchTable$Acc.1, sep=".")
-    searchTable$Res.2 <- paste(searchTable$XLink.AA.2, searchTable$Acc.2, sep=".")
-    searchTable$xlinkedResPair <- ifelse(searchTable$Res.1 <= searchTable$Res.2, 
-                                         paste(searchTable$Res.1, searchTable$Res.2, sep="::"),
-                                         paste(searchTable$Res.2, searchTable$Res.1, sep="::"))
-    searchTable$xlinkedResPair <- as.factor(searchTable$xlinkedResPair)
-    searchTable$xlinkedProtPair <- as.factor(searchTable$xlinkedProtPair)
-    searchTable <- searchTable %>% add_count(xlinkedResPair, name="numCSM")
-    searchTable <- searchTable %>% add_count(xlinkedProtPair, name="numPPSM")
-    return(searchTable)
+   searchTable <- searchTable %>%
+      mutate(Acc.1 = as.character(Acc.1),
+             Acc.2 = as.character(Acc.2))
+   searchTable$xlinkedProtPair <- ifelse(searchTable$Decoy2 == "Decoy",
+                                         ifelse(searchTable$Protein.1 <= searchTable$Protein.2,
+                                                paste("decoy", searchTable$Protein.1, searchTable$Protein.2, sep="::"),
+                                                paste("decoy", searchTable$Protein.2, searchTable$Protein.1, sep="::")),
+                                         ifelse(searchTable$Acc.1 <= searchTable$Acc.2,
+                                                paste(searchTable$Acc.1, searchTable$Acc.2, sep="::"),
+                                                paste(searchTable$Acc.2, searchTable$Acc.1, sep="::")))
+   accs <- unique(c(searchTable$Acc.1, searchTable$Acc.2)) %>% str_sort()
+   searchTable <- searchTable %>% mutate(Acc.1 = factor(Acc.1, levels = accs),
+                                         Acc.2 = factor(Acc.2, levels = accs))
+   searchTable$Res.1 <- paste(searchTable$XLink.AA.1, searchTable$Acc.1, sep=".")
+   searchTable$Res.2 <- paste(searchTable$XLink.AA.2, searchTable$Acc.2, sep=".")
+   searchTable$xlinkedResPair <- ifelse(searchTable$Res.1 <= searchTable$Res.2, 
+                                        paste(searchTable$Res.1, searchTable$Res.2, sep="::"),
+                                        paste(searchTable$Res.2, searchTable$Res.1, sep="::"))
+   searchTable$xlinkedPepPair <- ifelse(searchTable$DB.Peptide.1 <= searchTable$DB.Peptide.2,
+                                        paste(searchTable$DB.Peptide.1, searchTable$DB.Peptide.2, sep="::"),
+                                        paste(searchTable$DB.Peptide.2, searchTable$DB.Peptide.1, sep="::"))
+   searchTable$xlinkedResPair <- as.factor(searchTable$xlinkedResPair)
+   searchTable$xlinkedProtPair <- as.factor(searchTable$xlinkedProtPair)
+   searchTable$xlinkedPepPair <- as.factor(searchTable$xlinkedPepPair)
+   searchTable <- searchTable %>%
+      add_count(xlinkedResPair, name="numCSM") #%>%
+#      add_count(xlinkedProtPair, name="numPPSM")
+uniqueProtCount <- searchTable %>%
+   select(xlinkedProtPair, xlinkedResPair) %>%
+   group_by(xlinkedProtPair, xlinkedResPair) %>%
+   summarize(.groups="drop") %>%
+   group_by(xlinkedProtPair) %>%
+   count(name = "numPPSM") %>%
+   ungroup()
+  searchTable <- left_join(select(searchTable, -any_of("numPPSM")), uniqueProtCount, by="xlinkedProtPair")
+   if ("Module.1" %in% names(searchTable) & "Module.2" %in% names(searchTable)) {
+      searchTable <- searchTable %>%
+         mutate(Module.1 = as.character(Module.1),
+                Module.2 = as.character(Module.2))
+      mods <- unique(c(searchTable$Module.1, searchTable$Module.2)) %>% str_sort()
+      searchTable <- searchTable %>%
+         mutate(xlinkedModulPair = ifelse(Module.1 <= Module.2,
+                                          str_c(Module.1, Module.2, sep="::"),
+                                          str_c(Module.2, Module.1, sep="::"))
+         ) %>%
+         mutate(xlinkedModulPair = as_factor(xlinkedModulPair),
+                Module.1 = factor(Module.1, levels = mods),
+                Module.2 = factor(Module.2, levels = mods)) %>%
+         add_count(xlinkedModulPair, name="numMPSM")
+   }
+   return(searchTable)
 }
 
 countSMs <- function(searchTable) {
@@ -370,6 +466,74 @@ calculatePeptideLengths <- function(searchTable) {
     searchTable$Len.Pep.1 <- nchar(searchTable$DB.Peptide.1)
     searchTable$Len.Pep.2 <- nchar(searchTable$DB.Peptide.2)
     return(searchTable)
+}
+
+getDiagnosticMatches <- function(msms.ions, msms.int) {
+   ions <- unlist(str_split(msms.ions, ";"))
+   ints <- as.numeric(unlist(str_split(msms.int, ";")))
+   total.int <- sum(ints, na.rm = T)
+   mh_a <- str_which(ions, "MH\\#")
+   ion_a <- ions[mh_a]
+   int_a <- sum(ints[mh_a]/total.int)
+   mh_s <- str_which(ions, "MH\\*")
+   ion_s <- ions[mh_s]
+   int_s <- sum(ints[mh_s]/total.int)
+   if (length(mh_a) == 0) ion_a <- NA
+   if (length(mh_a) == 0) int_a <- 0
+   if (length(mh_s) == 0) ion_s <- NA
+   if (length(mh_a) == 0) int_a <- 0
+   diagnostics <- list(ion_a, int_a, ion_s, int_s)
+}
+
+calculateDiagnosticPairs <- function(datTab) {
+   datTab <- datTab %>%
+      mutate(diagnostics.1 = map2(MSMS.Ions.1, MSMS.Intensities.1, getDiagnosticMatches),
+             diagnostics.2 = map2(MSMS.Ions.2, MSMS.Intensities.2, getDiagnosticMatches),
+             aaPair = map2_lgl(diagnostics.1, diagnostics.2, function(x, y) {
+                if_else(x[[2]] > 0.01 & y[[2]] > 0.01, T, F)}),
+             ttPair = map2_lgl(diagnostics.1, diagnostics.2, function(x, y) {
+                if_else(x[[4]] > 0.01 & y[[4]] > 0.01, T, F)}),
+             diagnosticPair = if_else(aaPair | ttPair, T, F)
+      )
+}
+
+calculateCrossDiagnosticPair <- function(datTab.etd, datTab.cid, masterScanFile) {
+   datTab.etd <- datTab.etd %>% 
+      mutate(Fraction = str_replace_all(Fraction, "_FTMSms2[[a-z]]+$", ""))
+   datTab.cid <- datTab.cid %>% 
+      mutate(Fraction = str_replace_all(Fraction, "_FTMSms2[[a-z]]+$", ""))
+   masterScanFile <- masterScanFile %>% 
+      mutate(fraction = str_replace_all(fraction, "_FTMSms2[[a-z]]+$", ""))
+   datTab.etd <- left_join(datTab.etd, select(masterScanFile, fraction, ms2cidScanNo, ms2etdScanNo),
+                           by=c("Fraction"="fraction", "MSMS.Info"="ms2etdScanNo"))
+   datTab.etd <- left_join(datTab.etd, select(datTab.cid, Fraction, MSMS.Info, diagnosticPair),
+                           by=c("Fraction"="Fraction", "ms2cidScanNo"="MSMS.Info"),
+                           suffix=c("",".cross"))
+   datTab.etd <- datTab.etd %>%
+      mutate(diagnosticPair.cross = if_else(is.na(diagnosticPair.cross), F, diagnosticPair.cross))
+   return(datTab.etd)
+}
+
+getDiagnosticMatchesETD <- function(msms.ions, msms.int) {
+   ions <- unlist(str_split(msms.ions, ";"))
+   ints <- as.numeric(unlist(str_split(msms.int, ";")))
+   total.int <- sum(ints, na.rm = T)
+   mh_p <- str_which(ions, "P[^\\+\\-]")
+   ion_p <- ions[mh_p]
+   int_p <- sum(ints[mh_p]/total.int)
+   if (length(mh_p) == 0) ion_p <- NA
+   if (length(mh_p) == 0) int_p <- 0
+   diagnostics <- list(ion_p, int_p)
+}
+
+calculateDiagnosticPairsETD <- function(datTab) {
+   datTab <- datTab %>%
+      mutate(diagnostics.1 = map2(MSMS.Ions.1, MSMS.Intensities.1, getDiagnosticMatchesETD),
+             diagnostics.2 = map2(MSMS.Ions.2, MSMS.Intensities.2, getDiagnosticMatchesETD),
+             ppPair = map2_lgl(diagnostics.1, diagnostics.2, function(x, y) {
+                if_else(x[[2]] > 0.01 & y[[2]] > 0.01, T, F)}),
+             diagnosticPair = ppPair
+      )
 }
 
 lengthFilter <- function(searchTable, minLen, maxLen) {
@@ -443,31 +607,29 @@ violationRate <- function(datTab, threshold, classifier="Score.Diff", maxDistanc
     return(nAbove / (nAbove + nBelow))
 }
 
-generateErrorTable <- function(datTab, classifier="SVM.score",
-                               errorFUN=calculateFDR, ...) {
-    class.max <- ceiling(max(datTab[[classifier]]))
-    class.min <- floor(min(datTab[[classifier]]))
-    # if (classifier=="SVM.score") {
-    #     range.spacing = 0.1
-    # } else if (classifier=="Score.Diff") {
-    #     range.spacing = 0.25
-    # } else {
-    range.spacing = abs(class.max - class.min) / 500
-    # }
-    class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
-    error.rates <- unlist(lapply(class.range, function(threshold) {
-        errorFUN(datTab, threshold=threshold, classifier=classifier, ...)
-    }))
-    error.rates[is.na(error.rates)] <- 0
-    #plot(error.rates ~ class.range, type="l")
-    
-    num.hits <- map_dfr(class.range, function(threshold) {
-        calculateHits(removeDecoys(datTab), threshold=threshold, classifier=classifier)
-    })
-    num.hits$fdr <- error.rates
-    num.hits$total <- num.hits$inter + num.hits$intra
-    num.hits <- num.hits %>% filter(total > 0)
-    return(num.hits)
+generateErrorTable <- function(datTab,
+                               classifier="SVM.score",
+                               errorFUN=calculateFDR,
+                               ...,
+                               class.min = NA,
+                               class.max = NA) {
+   if (is.na(class.min)) {class.min = floor(min(datTab[[classifier]]))}
+   if (is.na(class.max)) {class.max = ceiling(max(datTab[[classifier]]))}
+   range.spacing <- abs(class.max - class.min) / 500
+   class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
+   error.rates <- unlist(lapply(class.range, function(threshold) {
+      errorFUN(datTab, threshold=threshold, classifier=classifier, ...)
+   }))
+   error.rates[is.na(error.rates)] <- 0
+   #plot(error.rates ~ class.range, type="l")
+   
+   num.hits <- map_dfr(class.range, function(threshold) {
+      calculateHits(removeDecoys(datTab), threshold=threshold, classifier=classifier)
+   })
+   num.hits$fdr <- error.rates
+   num.hits$total <- num.hits$inter + num.hits$intra
+   num.hits <- num.hits %>% filter(total > 0)
+   return(num.hits)
 }
 
 generateErrorTableSeparate <- function(datTab, classifier="SVM.score",
@@ -489,7 +651,7 @@ generateErrorTableSeparate <- function(datTab, classifier="SVM.score",
     })
 }
 
-findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
+findThresholdOld <- function(datTab, targetER=0.05, minThreshold=-5,
                           classifier="SVM.score", errorFUN=calculateFDR, ...) {
     num.hits <- generateErrorTable(datTab, classifier, errorFUN, ...)
     error.rates <- num.hits$fdr
@@ -512,6 +674,23 @@ findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
         threshold <- minThreshold
     }
     return(list("globalThresh"=threshold, "correspondingFDR" = errorFUN(datTab, threshold, classifier, ...)))
+}
+
+findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
+                          classifier="SVM.score", errorFUN=calculateFDR, ...) {
+   num.hits <- generateErrorTable(datTab, classifier, errorFUN, ...)
+   error.rates <- num.hits$fdr
+   class.range <- num.hits$thresh
+   low.index <- which.min(abs(error.rates - 0.25))
+   low.value <- class.range[low.index]
+   high.index <- which.min(abs(error.rates[low.index:length(error.rates)]))
+   high.value <- class.range[low.index + high.index]
+   num.hits <- generateErrorTable(datTab, class.min = low.value, class.max = high.value, 
+                                  classifier = classifier, errorFUN = errorFUN, ...)
+   error.rates <- num.hits$fdr
+   class.range <- num.hits$thresh
+   threshold = class.range[which.min(abs(error.rates - targetER))]
+   return(list("globalThresh"=threshold, "correspondingFDR" = errorFUN(datTab, threshold, classifier, ...)))
 }
 
 findSeparateThresholds <- function(datTab, targetER=0.05, minThreshold=-5,
@@ -555,18 +734,18 @@ renameModTable <- function(modTab, oldName, newName) {
     return(modTab)
 }
 
-# renumberProtein <-function(dt, protein, shift) {
-#     dt[dt$Acc.1==protein,"XLink.AA.1"] <-
-#         dt[dt$Acc.1==protein,"XLink.AA.1"] + shift
-#     dt[dt$Acc.2==protein,"XLink.AA.2"] <-
-#         dt[dt$Acc.2==protein,"XLink.AA.2"] + shift
-#     dt <- assignModules(dt, modulFile)
-#     dt <- calculatePairs(dt)
-#     if (is.data.frame(object@caTracedPDB)) {
-#         dt <- measureDistances(dt,object@caTracedPDB,object@chainMap)
-#     }
-#     return(dt)
-#}
+renumberProtein <-function(dt, protein, shift) {
+    dt[dt$Acc.1==protein,"XLink.AA.1"] <-
+        dt[dt$Acc.1==protein,"XLink.AA.1"] + shift
+    dt[dt$Acc.2==protein,"XLink.AA.2"] <-
+        dt[dt$Acc.2==protein,"XLink.AA.2"] + shift
+    # dt <- assignModules(dt, modulFile)
+    # dt <- calculatePairs(dt)
+    # if (is.data.frame(object@caTracedPDB)) {
+    #     dt <- measureDistances(dt,object@caTracedPDB,object@chainMap)
+    # }
+    return(dt)
+}
 
 # setGeneric("pairPlot", function(object, color="lightseagreen",
 #                                 removeMods=NA_character_, displayEmpty=T) {
@@ -670,9 +849,8 @@ parseCrosslinker <- function(datTab) {
     return(datTab)
 }
 
-buildClassifier <- function(datTab, params=defaultParams, scoreName="SVM.score") {
+buildClassifier <- function(datTab, params=params.best, scoreName="SVM.score") {
     datTab$massError <- abs(datTab$ppm - mean(datTab$ppm))
-    datTab$charge <- as.factor(datTab$z)
     if (nrow(datTab) > 30000) {
         sampleNo <- 15000
     } else {
@@ -681,9 +859,6 @@ buildClassifier <- function(datTab, params=defaultParams, scoreName="SVM.score")
     ind <- sample(nrow(datTab),sampleNo)
     train <- datTab[ind,]
     test <- datTab[-1 * ind,]
-    #defaultParams <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
-    #params <- c("percMatched", "Score.Diff", "charge", "massError", "numCSM","numPPSM", "xlinkClass")
-    #params <- c("Score.Diff", "percMatched", "massError", "charge", "numPPSM", "xlinkClass", "numCSM", "pep2.longest.run")
     wghts <- numeric(0)
     wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
     wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
@@ -697,11 +872,15 @@ buildClassifier <- function(datTab, params=defaultParams, scoreName="SVM.score")
     p <- predict(fit, subset(datTab,select=params),decision.values=T)
     datTab[[scoreName]] <- as.numeric(attr(p,"decision.values"))
     print(paste("training weights:", round(wghts,2)))
-    tab <- table(datTab$Decoy2, datTab[[scoreName]] > 0)
-    if (tab[1] < tab[3]) {
+    if (cor(datTab$Score.Diff, datTab[[scoreName]]) < 0) {
         datTab[[scoreName]] <- -1 * datTab[[scoreName]]
-        tab <- table(datTab$Decoy2, datTab[[scoreName]] > 0)
     }
+    # meanT <- mean(datTab[[scoreName]][datTab$Decoy2=="Target"],na.rm=T)
+    # meanD <- mean(datTab[[scoreName]][datTab$Decoy2=="Decoy"],na.rm=T)
+    # if (meanT < meanD) {
+    #     datTab[[scoreName]] <- -1 * datTab[[scoreName]]
+    # }
+    tab <- table(datTab$Decoy2, datTab[[scoreName]] > 0)
     print(tab)
     print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
     return(datTab)
@@ -917,10 +1096,12 @@ longestBackboneIonSeries <- function(ms.product.info) {
 
 formatXLTable <- function(datTab) {
     annoyingColumns <- str_which(names(datTab), "(Int|Dec)[a-z]{2}\\.[[1-2]]")
-    datTab <- datTab[, -annoyingColumns]
+    if (length(annoyingColumns) > 0) {
+       datTab <- datTab[, -annoyingColumns]
+    }
     datTab <- datTab %>%
         select(-starts_with("Res"),
-               -starts_with("Decoy"),
+#               -starts_with("Decoy"),
                -starts_with("Num\\."),
                -any_of("massError"))
     if (sum(!is.na(datTab$distance)) == 0) {
@@ -929,7 +1110,7 @@ formatXLTable <- function(datTab) {
     }
     datTab <- datTab[order(datTab$SVM.score, decreasing = T),]
     datTab <- datTab %>% select(any_of(c(
-        "keep", "specMS2", "specMS3.1", "specMS3.2", 
+        "keep", "specMS2", "specMS3.1", "specMS3.2", "Decoy", "groundTruth",
         "xlinkedResPair", "xlinkedProtPair", "xlinkedModulPair",
         "SVM.score", "SVM.new", "distance", "m/z", "z", "ppm",
         "DB.Peptide.1", "DB.Peptide.2", "Score", "Score.Diff", "percMatched",
@@ -938,7 +1119,7 @@ formatXLTable <- function(datTab) {
         "Acc.2", "XLink.AA.2", "Protein.2", "Module.2", "Species.2",
         "xlinkClass", "Len.Pep.1", "Len.Pep.2",
         "Peptide.1", "Peptide.2", "numCSM", "numPPSM", "numMPSM",
-        "Fraction", "RT", "MSMS.Info", "id")
+        "Fraction", "RT", "MSMS.Info", "id", "experiment")
     ))
     if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
         datTab <- datTab %>% mutate(Protein.1 = factor(Protein.1), 
@@ -1013,25 +1194,12 @@ calculatePrecMass <- function(pepMass, charge) {
     return(precMass)
 }
 
-# getIndicesForFile_orig <- function(file) {
-#     mgfFile <- readLines(file)
-#     scanNo <- na.omit(str_match(mgfFile, "TITLE=Scan\\s([[0-9]]+)"))
-#     scanNo <- as.integer(scanNo[,2])
-#     masterScanNo <- na.omit(str_match(mgfFile, "Master_Scan_Number=([[0-9]]+)"))
-#     masterScanNo <- as.integer(masterScanNo[,2])
-#     pepMass <- na.omit(str_match(mgfFile, "PEPMASS=([[0-9]]+\\.[[0-9]]+)"))
-#     pepMass <- as.numeric(pepMass[,2])
-#     charge <- na.omit(str_match(mgfFile, "CHARGE=([[0-9]])\\+"))
-#     charge <- as.integer(charge[,2])
-#     extract <- data.frame(scanNo=scanNo, masterScanNo=masterScanNo, 
-#                           pepmass=pepMass, charge=charge)
-#     return(extract)
-# }
-
 getIndicesForFile <- function(file) {
-    scanNo <- system2("grep", c("'TITLE=Scan'", file), stdout = T)
-    scanNo <- str_extract(scanNo, "(?<=TITLE\\=Scan\\s)[[0-9]]+")
+    scanNoLine <- system2("grep", c("'TITLE=Scan'", file), stdout = T)
+    scanNo <- str_extract(scanNoLine, "(?<=TITLE\\=Scan\\s)[[0-9]]+")
     scanNo <- as.integer(scanNo)
+    retTime <- str_extract(scanNoLine, "(?<=\\(rt\\=)[[0-9]]+\\.[[0-9]]+")
+    retTime <- as.numeric(retTime)
     masterScanNo <- system2("grep", c("'Master_Scan_Number'", file), stdout = T)
     masterScanNo <- str_extract(masterScanNo, "(?<=Master_Scan_Number\\=)([[0-9]]+)")
     masterScanNo <- as.integer(masterScanNo)
@@ -1042,7 +1210,7 @@ getIndicesForFile <- function(file) {
     charge <- str_extract(charge, "(?<=CHARGE\\=)[[0-9]](?=\\+)")
     charge <- as.integer(charge)
     extract <- data.frame(scanNo=scanNo, masterScanNo=masterScanNo, 
-                          pepmass=pepMass, charge=charge)
+                          pepmass=pepMass, charge=charge, retTime = retTime)
     return(extract)
 }
 
@@ -1058,28 +1226,31 @@ createMasterScanFile <- function(ms3PAVApeaklist,
     for (i in 1:numFiles) {
         ms3masterscansCID <- getIndicesForFile(ms3PAVApeaklist[i])
         names(ms3masterscansCID) <- c("ms3ScanNo", "ms2cidScanNo", 
-                                      "pepmass.ms3", "charge.ms3")
+                                      "pepmass.ms3", "charge.ms3", "retTime.ms3")
         ms2masterscansCID <- getIndicesForFile(ms2PAVApeaklistCID[i])
         if (!is.na(ms2PAVApeaklistETD[i])) {
             ms2masterscansETD <- getIndicesForFile(ms2PAVApeaklistETD[i])
             ms2masterscans <- full_join(ms2masterscansCID, ms2masterscansETD,
                                         by=c("masterScanNo", "pepmass","charge"))
             names(ms2masterscans) <- c("ms2cidScanNo", "ms1MasterScanNo",
-                                       "pepmass.ms2", "charge.ms2", "ms2etdScanNo")
+                                       "pepmass.ms2", "charge.ms2", "ms2etdScanNo", "retTime.ms2")
         } else {
             ms2masterscans <- ms2masterscansCID
             names(ms2masterscans) <- c("ms2cidScanNo", "ms1MasterScanNo",
-                                       "pepmass.ms2", "charge.ms2")
+                                       "pepmass.ms2", "charge.ms2", "retTime.ms2")
         }
-        ms2masterscans <- full_join(ms2masterscans, ms3masterscansCID, 
-                                    by="ms2cidScanNo")
         ms2masterscans$precMass.ms2 <- map2_dbl(ms2masterscans$pepmass.ms2, 
                                                 ms2masterscans$charge.ms2,
                                                 calculatePrecMass)
+        ms3masterscansCID$precMass.ms3 <- map2_dbl(ms3masterscansCID$pepmass.ms3,
+                                                   ms3masterscansCID$charge.ms3,
+                                                   calculatePrecMass)
+        ms2masterscans <- full_join(ms2masterscans, ms3masterscansCID, 
+                                    by="ms2cidScanNo")
         if (!is.na(ms2PAVApeaklistETD[i])) {
-            ms2masterscans <- ms2masterscans[,c(2,1,5:6,3:4,9,7:8)]
+            ms2masterscans <- ms2masterscans[,c(10000,2,1,5:6,3:4,9,7:8)]
         } else {
-            ms2masterscans <- ms2masterscans[,c(2,1,5,3:4,8,6:7)]
+            ms2masterscans <- ms2masterscans[,c(2,1,7,3:6,8:11)]
         }
         fract <- str_replace(basename(ms3PAVApeaklist[i]), "\\.(txt|mgf)$", "")
         ms2masterscans$fraction <- fract
@@ -1098,14 +1269,16 @@ createMasterScanFile2 <- function(ms2PAVApeaklistCID=NA,
    }
    masterScans <- list()
    for (i in 1:numFiles) {
-      ms2masterscansCID <- getIndicesForFile(ms2PAVApeaklistCID[i])
+      ms2masterscansCID <- getIndicesForFile(ms2PAVApeaklistCID[i]) %>% 
+         rename(ms2cidScanNo = scanNo)
       if (!is.na(ms2PAVApeaklistETD[i])) {
-         ms2masterscansETD <- getIndicesForFile(ms2PAVApeaklistETD[i])
+         ms2masterscansETD <- getIndicesForFile(ms2PAVApeaklistETD[i]) %>%
+            rename(ms2etdScanNo = scanNo)
          ms2masterscans <- full_join(ms2masterscansCID, ms2masterscansETD,
-                                     by=c("masterScanNo", "pepmass","charge"))
-         names(ms2masterscans) <- c("ms2cidScanNo", "ms1MasterScanNo",
-                                    "pepmass.ms2", "charge.ms2", "ms2etdScanNo")
-         ms2masterscans <- ms2masterscans[,c(2,1,5,3,4)]
+                                     by=c("masterScanNo", "pepmass","charge"),
+                                     suffix=c(".cid", ".etd")) %>%
+            select(masterScanNo, ms2cidScanNo, ms2etdScanNo, pepmass, charge, everything()) %>%
+            rename("pepmass.ms2" = pepmass, "charge.ms2" = charge)
       }
       fract <- str_replace(basename(ms2PAVApeaklistCID[i]), "\\.(txt|mgf)$", "")
       ms2masterscans$fraction <- fract
@@ -1117,7 +1290,9 @@ createMasterScanFile2 <- function(ms2PAVApeaklistCID=NA,
 
 
 readMS3results <- function(ms3SearchTable){
-    ms3results <- read_tsv(ms3SearchTable, skip=2) %>% 
+    ms3results <- read_tsv(ms3SearchTable, skip=2) 
+    if (!"Spectrum" %in% names(ms3results)) ms3results <- ms3results %>% add_column("Spectrum" = 1, .after="RT")
+    ms3results <- ms3results %>% 
         select(c("DB Peptide", "Peptide", "Protein Mods",
                "Fraction", "RT", "Spectrum", "MSMS Info", "Score",
                "Expect", "Protein Name", "Acc #", "Species"))
@@ -1156,9 +1331,10 @@ processMS3xlinkResults <- function(ms3results, tol=25) {
                                                    n_ms3$ms2cidScanNo,
                                                    n_ms3$data), ms3ionFragFind, tol, mis=-1*proton)
     ms3crosslinksFlat <- rbind(ms3crosslinksFlatMisM1, ms3crosslinksFlatMis2, ms3crosslinksFlatMis, ms3crosslinksFlat)
-    ms3crosslinksFlat$Score.Diff <- ms3crosslinksFlat$Sc.2
+    ms3crosslinksFlat$Score.Diff <- ifelse(ms3crosslinksFlat$Sc.2 < ms3crosslinksFlat$Sc.1,
+                                           ms3crosslinksFlat$Sc.2, ms3crosslinksFlat$Sc.1)
     ms3crosslinksFlat <- assignXLinkClass(ms3crosslinksFlat)
-    ms3crosslinksFlat <- lengthFilter(ms3crosslinksFlat, minLen = 3, maxLen = 35)
+    ms3crosslinksFlat <- lengthFilter(ms3crosslinksFlat, minLen = 3, maxLen = 40)
     ms3crosslinksFlat <- scoreFilter(ms3crosslinksFlat, minScore = 0)
     ms3crosslinksFlat <- calculateDecoys(ms3crosslinksFlat)
     ms3crosslinksFlat <- calculatePairs(ms3crosslinksFlat)
@@ -1189,15 +1365,28 @@ ms3ionFragFind <- function(fraction, masterScanNo, scanGroupTibble, tol = 25, mi
     #    scanGroupTibble$sulfenic <- str_detect(scanGroupTibble$Protein.Mods.ms3, "Sulfenic@[[0-9\\|]]+")
     summedPairs <- scanGroupTibble$precMass.ms3 %o% rep(1, scanGroupSize) +
         rep(1, scanGroupSize) %o% scanGroupTibble$precMass.ms3
+
     massErrors.AT <- getMassError(ms2Mass, summedPairs + H2O)
     matchesMS2 <- abs(massErrors.AT) <= tol
     allowed <- scanGroupTibble$alkene %o% scanGroupTibble$thiol
     ATpairs <- which(matchesMS2 * allowed == 1)
+    
     massErrors.AS <- getMassError(ms2Mass, summedPairs)
     matchesMS2 <- abs(massErrors.AS) <= tol
     allowed <- scanGroupTibble$alkene %o% scanGroupTibble$sulfenic
     ASpairs <- which(matchesMS2 * allowed == 1)
-    numMatches <- length(c(ATpairs, ASpairs))
+
+    massErrors.AA <- getMassError(ms2Mass, summedPairs + sulfur + H2O)
+    matchesMS2 <- abs(massErrors.AA) <= tol
+    allowed <- scanGroupTibble$alkene %o% scanGroupTibble$alkene
+    AApairs <- which(matchesMS2 * allowed == 1)
+
+    massErrors.TT <- getMassError(ms2Mass, summedPairs - sulfur + H2O)
+    matchesMS2 <- abs(massErrors.TT) <= tol
+    allowed <- scanGroupTibble$thiol %o% scanGroupTibble$thiol
+    TTpairs <- which(matchesMS2 * allowed == 1)
+    
+    numMatches <- length(c(ATpairs, ASpairs, AApairs, TTpairs))
     dimensions <- dim(allowed)
     if (numMatches==0) return(data.frame())
     placeHolder <- vector("list", numMatches)
@@ -1235,6 +1424,40 @@ ms3ionFragFind <- function(fraction, masterScanNo, scanGroupTibble, tol = 25, mi
             placeHolder[[index]] <- flatMS3pair
         }
         index = index + 1
+    }
+    for (CSM in AApairs) {
+       massError <- massErrors.AA[CSM]
+       peptidePair <- arrayInd(CSM, dimensions)
+       flatMS3pair <- flattenMS3pair(scanGroupTibble[peptidePair[,1],],
+                                     scanGroupTibble[peptidePair[,2],],
+                                     fraction, masterScanNo,
+                                     frag1="Alkene", frag2="Alkene")
+       flatMS3pair$ppm <- massError
+       missing <- is.na(flatMS3pair$XLink.AA.1) | is.na(flatMS3pair$XLink.AA.2)
+       flatMS3pair <- flatMS3pair[!missing, ]
+       if (nrow(flatMS3pair)==0) {
+          placeHolder <- placeHolder[-index]
+       } else {
+          placeHolder[[index]] <- flatMS3pair
+       }
+       index = index + 1
+    }
+    for (CSM in TTpairs) {
+       massError <- massErrors.TT[CSM]
+       peptidePair <- arrayInd(CSM, dimensions)
+       flatMS3pair <- flattenMS3pair(scanGroupTibble[peptidePair[,1],],
+                                     scanGroupTibble[peptidePair[,2],],
+                                     fraction, masterScanNo,
+                                     frag1="Thiol\\(Unsaturated\\)", frag2="Thiol\\(Unsaturated\\)")
+       flatMS3pair$ppm <- massError
+       missing <- is.na(flatMS3pair$XLink.AA.1) | is.na(flatMS3pair$XLink.AA.2)
+       flatMS3pair <- flatMS3pair[!missing, ]
+       if (nrow(flatMS3pair)==0) {
+          placeHolder <- placeHolder[-index]
+       } else {
+          placeHolder[[index]] <- flatMS3pair
+       }
+       index = index + 1
     }
     if (length(placeHolder)==0) {
         return(data.frame())
@@ -1325,143 +1548,6 @@ flattenMS3pair <- function(ms3CSM1, ms3CSM2, fraction, masterScanNo=NA,
 # }
 # 
 
-# peptideGroups <- list(
-#     Group1=c(
-#         "SDKNR",
-#         "KLINGIR",
-#         "KFDNLTK",
-#         "FIKPILEK",
-#         "APLSASMIKR",
-#         "NPIDFLEAKGYK",
-#         "LPKYSLFELENGR",
-#         "TEVQTGGFSKESILPK"),
-#     Group2=c(
-#         "VKYVTEGMR",
-#         "FDNLTKAER",
-#         "DFQFYKVR",
-#         "YDENDKLIR",
-#         "MIAKSEQEIGK",
-#         "HKPENIVIEMAR",
-#         "TILDFLKSDGFANR",
-#         "KIECFDSVEISGVEDR",
-#         "YVNFLYLASHYEKLK"),
-#     Group3=c(
-#         "LSKSR",
-#         "DKPIR",
-#         "KDLIIK",
-#         "MKNYWR",
-#         "KGILQTVK",
-#         "NSDKLIAR",
-#         "DDSIDNKVLTR"),
-#     Group4=c(
-#         "KLVDSTDK",
-#         "IEKILTFR",
-#         "KAIVDLLFK",
-#         "VLSAYNKHR",
-#         "IEEGIKELGSQILK",
-#         "SSFEKNPIDFLEAK",
-#         "SNFDLAEDAKLQLSK",
-#         "HSLLYEYFTVYNELTKVK"),
-#     Group5=c(
-#         "KVTVK",
-#         "EKIEK",
-#         "VITLKSK",
-#         "QLKEDYFK",
-#         "QLLNAKLITQR",
-#         "GGLSELDKAGFIK",
-#         "MDGTEELLVKLNR"),
-#     Group6=c(
-#         "EVKVITLK",
-#         "KPAFLSGEQK",
-#         "ENQTTQKGQK",
-#         "KTEVQTGGFSK",
-#         "VVDELVKVMGR",
-#         "LESEFVYGDYKVYDVR",
-#         "MLASAGELQKGNELALPSK",
-#         "NFMQLIHDDSLTFKEDIQK",
-#         "VLPKHSLLYEYFTVYNELTK"),
-#     Group7=c(
-#         "KMIAK",
-#         "ESILPKR",
-#         "DLIIKLPK",
-#         "FKVLGNTDR",
-#         "SEQEIGKATAK",
-#         "AIVDLLFKTNR",
-#         "LKTYAHLFDDK",
-#         "VNTEITKAPLSASMIK",
-#         "YDEHHQDLTLLKALVR"),
-#     Group8=c(
-#         "KDWDPK",
-#         "QQLPEKYK",
-#         "KVLSMPQVNIVK",
-#         "MTNFDKNLPNEK",
-#         "QITKHVAQILDSR",
-#         "KSEETITPWNFEEVVDK",
-#         "KNGLFGNLIALSLGLTPNFK",
-#         "SKLVSDFR"),
-#     Group9=c(
-#         "LKSVK",
-#         "IIKDK",
-#         "DWDPKK",
-#         "LKGSPEDNEQK",
-#         "VLSMPQVNIVKK",
-#         "LENLIAQLPGEKK",
-#         "LIYLALAHMIKFR",
-#         "YPKLESEFVYGDYK"),
-#     Group10=c(
-#         "VPSKK",
-#         "VTVKQLK",
-#         "EDYFKK",
-#         "VKYVTEGMR",
-#         "GKSDNVPSEEVVK",
-#         "LEESFLVEEDKK",
-#         "QEDFYPFLKDNR"),
-#     Group11=c(
-#         "GQKNSR",
-#         "AGFIKR",
-#         "GYKEVK",
-#         "VMKQLK",
-#         "KDFQFYK",
-#         "LVDSTDKADLR",
-#         "SDNVPSEEVVKK",
-#         "KNLIGALLFDSGETAEATR"),
-#     Group12=c(
-#         "HSIKK",
-#         "DKQSGK",
-#         "NLPNEKVLPK",
-#         "QSGKTILDFLK",
-#         "MNTKYDENDK",
-#         "SVKELLGITIMER",
-#         "TYAHLFDDKVMK",
-#         "FNASLGTYHDLLKIIK")
-# )
-
-# Max number of crosslinks:
-#peptideGroups %>% map_dbl(function(x) length(x)**2) %>% sum
-
-# compareFDRs <- function(datTab, classifier="SVM.score", scalingFactor=10, ...) {
-#     class.max <- ceiling(max(datTab[[classifier]]))
-#     class.min <- floor(min(datTab[[classifier]]))
-#     if (classifier=="SVM.score") {
-#         range.spacing = 0.1
-#     } else if (classifier=="Score.Diff") {
-#         range.spacing = 0.25
-#     } else {
-#         range.spacing = abs(class.max - class.min) / 100
-#     }
-#     class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
-#     FDRs <- unlist(lapply(class.range, function(threshold) {
-#         calculateFDR(datTab, threshold=threshold, classifier=classifier, scalingFactor=scalingFactor)
-#     }))
-#     FDRs[is.na(FDRs)] <- 0
-#     GTs <- unlist(lapply(class.range, function(threshold) {
-#         calculateGT(datTab, threshold=threshold, classifier=classifier)
-#     }))
-#     GTs[is.na(GTs)] <- 0
-#     plot(GTs ~ FDRs, type="l", lwd=2, ...)
-#     abline(a = 0, b=1, lt=2, col="red")
-# }
-
 fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="SVM.score",
                      minValue = floor(min(datTab[[classifier]], na.rm = T)),
                      maxValue = ceiling(max(datTab[[classifier]], na.rm = T)),
@@ -1488,8 +1574,13 @@ fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="SVM.sco
     displayLim =c(minValue,maxValue)
     plot(targetHist, col="lightblue", xlim=displayLim, 
          xlab=xlabel, main=NA)
-    plot(decoyHist, add=T, col="salmon")
-    plot(doubleDecoyHist, add=T, col="goldenrod1")
+    if (sum(decoyHist$counts) > sum(doubleDecoyHist$counts)) {
+       plot(decoyHist, add=T, col="salmon")
+       plot(doubleDecoyHist, add=T, col="goldenrod1")
+    } else {
+       plot(doubleDecoyHist, add=T, col="goldenrod1")
+       plot(decoyHist, add=T, col="salmon")
+    }
     abline(v=cutoff, lwd=2, lt=1, col="red")
     if (addLegend) {
         legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
@@ -1581,19 +1672,36 @@ calculateGroundTruthFDR <- function(datTab) {
 }
 
 bestResPair <- function(datTab, classifier=SVM.score){
-    quoClass <- enquo(classifier)
-    datTab <- datTab %>% group_by(xlinkedResPair) %>%
-        filter(!! quoClass==max(!! quoClass)) %>%
-        ungroup()
-    return(datTab)
+   quoClass <- enquo(classifier)
+   datTab <- datTab %>% 
+      calculatePairs() %>% 
+      group_by(xlinkedResPair) %>%
+      filter(!! quoClass==max(!! quoClass)) %>%
+      slice(1) %>%
+      ungroup()
+   return(datTab)
+}
+
+bestPepPair <- function(datTab, classifier=SVM.score){
+   quoClass <- enquo(classifier)
+   datTab <- datTab %>% 
+      calculatePairs %>% 
+      group_by(xlinkedPepPair) %>%
+      filter(!! quoClass==max(!! quoClass)) %>%
+      slice(1) %>%
+      ungroup()
+   return(datTab)
 }
 
 bestProtPair <- function(datTab, classifier=SVM.score){
-    quoClass <- enquo(classifier)
-    datTab <- datTab %>% group_by(xlinkedProtPair) %>%
-        filter(!! quoClass==max(!! quoClass)) %>%
-        ungroup()
-    return(datTab)
+   quoClass <- enquo(classifier)
+   datTab <- datTab %>% 
+      calculatePairs %>% 
+      group_by(xlinkedProtPair) %>%
+      filter(!! quoClass==max(!! quoClass)) %>%
+      slice(1) %>%
+      ungroup()
+   return(datTab)
 }
 
 bestModPair <- function(datTab, classifier=SVM.score){
@@ -1604,7 +1712,7 @@ bestModPair <- function(datTab, classifier=SVM.score){
     return(datTab)
 }
 
-bestResPairFraction <- function(datTab, classifier=classifier) {
+bestResPairFraction <- function(datTab, classifier=SVM.score) {
     quoClass <- enquo(classifier)
     datTab <- datTab %>%
         group_by(Fraction) %>%
@@ -1697,38 +1805,43 @@ numHitsPlot <- function(num.hits, threshold=0) {
     print(p)
 }
 
-bestResPair <- function(datTab, classifier=SVM.score){
-    quoClass <- enquo(classifier)
-    datTab <- datTab %>% group_by(xlinkedResPair) %>%
-        filter(!! quoClass==max(!! quoClass)) %>%
-        ungroup()
-    return(datTab)
-}
+# bestResPair <- function(datTab, classifier=SVM.score){
+#     quoClass <- enquo(classifier)
+#     datTab <- datTab %>% group_by(xlinkedResPair) %>%
+#         filter(!! quoClass==max(!! quoClass)) %>%
+#         ungroup()
+#     return(datTab)
+# }
 
 summarizeProtData <- function(datTab) {
     datTab <- datTab %>% filter(Decoy=="Target")
     datTab <- bestResPair(datTab)
-    datTab$Acc.1 <- fct_drop(datTab$Acc.1, only="decoy")
-    datTab$Acc.2 <- fct_drop(datTab$Acc.2, only="decoy")
-    matrixCounts <- datTab %>%
-        group_by(Acc.1, Acc.2) %>%
-        summarize(accCounts = sum(numCSM), .groups = "drop") %>%
-        complete(Acc.1, Acc.2) %>% 
-        unique() %>%
-        pivot_wider(names_from = Acc.2, values_from = accCounts) %>%
-        column_to_rownames("Acc.1") %>%
-        as.matrix()
-    matrixCounts[is.na(matrixCounts)] <- 0
-    matrixCounts <- matrixCounts + t(matrixCounts)
-    diag(matrixCounts) <- diag(matrixCounts) / 2
-    accNames <- rownames(matrixCounts)
-    matrixCounts <- clearAboveDiag(matrixCounts)
-    matrixCounts <- as_tibble(matrixCounts)
-    matrixCounts$Acc.1 <- accNames
-    matrixCounts <- matrixCounts %>%
-        pivot_longer(cols = -Acc.1, names_to = "Acc.2", values_to = "counts") %>%
-        mutate(counts = ifelse(counts==0, NA, counts))
-    return(matrixCounts)
+    if (length(levels(datTab$Acc.1)) < 500) {
+       datTab$Acc.1 <- fct_drop(datTab$Acc.1, only="decoy")
+       datTab$Acc.2 <- fct_drop(datTab$Acc.2, only="decoy")
+       matrixCounts <- datTab %>%
+          group_by(Acc.1, Acc.2) %>%
+          summarize(accCounts = sum(numCSM), .groups = "drop") %>%
+          complete(Acc.1, Acc.2) %>% 
+          unique() %>%
+          pivot_wider(names_from = Acc.2, values_from = accCounts) %>%
+          column_to_rownames("Acc.1") %>%
+          as.matrix()
+       matrixCounts[is.na(matrixCounts)] <- 0
+       matrixCounts <- matrixCounts + t(matrixCounts)
+       diag(matrixCounts) <- diag(matrixCounts) / 2
+       accNames <- rownames(matrixCounts)
+       matrixCounts <- clearAboveDiag(matrixCounts)
+       matrixCounts <- as_tibble(matrixCounts)
+       matrixCounts$Acc.1 <- accNames
+       matrixCounts <- matrixCounts %>%
+          pivot_longer(cols = -Acc.1, names_to = "Acc.2", values_to = "counts") %>%
+          mutate(counts = ifelse(counts==0, NA, counts))
+       return(matrixCounts)
+    } else {
+       matrixCounts = NA
+       return(matrixCounts)
+    }
 }
 
 summarizeModuleData <- function(datTab, modOrder = NULL) {
@@ -1766,7 +1879,7 @@ summarizeModuleData <- function(datTab, modOrder = NULL) {
         pivot_longer(cols = -Module.1, names_to = "Module.2", values_to = "counts") %>%
         mutate(counts = ifelse(counts==0, NA, counts))
     if (!is.null(modOrder)) {
-       matrixCounts <- matrixCounts %>% 
+       matrixCounts <- matrixCounts %>%
           mutate(Module.1 = fct_relevel(Module.1, modOrder),
                  Module.2 = fct_relevel(Module.2, modOrder))
     }

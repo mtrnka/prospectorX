@@ -1,4 +1,4 @@
-# load modules and do forth here.
+# load modules and so forth here.
 library(shiny)
 library(shinyFiles)
 library(tidyverse)
@@ -31,18 +31,21 @@ readParamsFile <- function(paramsFile) {
    )
 }
 
-defaultParams <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
+params.default <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
+params.best <- c("Score.Diff", "percMatched", "massError", "z", "numPPSM", "numCSM", "xlinkClass")
+params.best.nop <- c("Score.Diff", "percMatched", "massError", "z", "numCSM")
+   
 proton <- 1.007276
 H2O <- 18.01002
-
+SOH2 <- 49.98209
+sulfur <- 31.97152
+   
 # Path to MS-Viewer Data
 #exDir <- c(wd= './DemoFiles')
 exDir <- c(wd= '/mnt/pipeline/projects')
 #pathToXiFile <- "DemoFiles/xinetDemo/xiDemo.csv"
 pathToXiFile <- "/var/www/html/crosslink-viewer/demo/data"
 linkToXiView <- 'http://lanhuang2.physiology.uci.edu/crosslink-viewer/demo/Demo2.html'
-
-params.best <- c("Score.Diff", "percMatched", "massError", "z", "numPPSM", "numCSM", "xlinkClass")
 
 # For generating MS-Viewer Links Correctly
 queryTemplate <- "
