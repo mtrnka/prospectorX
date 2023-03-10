@@ -100,11 +100,11 @@ function(input, output, session) {
         } else if ("percMatched" %in% names(scTable)) {
           scTable <- tryCatch(buildClassifier(scTable, params.best),
                               error=function(cond) {message(str_c("buildClassifierError", cond))
-                                buildClassifier(scTable, defaultParams)
+                                buildClassifier(scTable, params.best.nop)
                               }
           )
         } else {
-          scTable <- buildClassifier(scTable, defaultParams)
+          scTable <- buildClassifier(scTable, params.default)
         }
         return(scTable)
       }
