@@ -1,8 +1,5 @@
-print("touchStone module loaded")
-
-readProspectorXLOutput <- function(inputFile, minPepLen = 3, minPepScore = 0, minScoreDiff = 0){
-   dataTable <- read_tsv(inputFile)
-   dataTable <- dataTable %>% select(-starts_with("%"))
+readProspectorXLOutput <- function(inputFile, minPepLen = 3, minPepScore = 0, minScoreDiff = 0, minIons = 3){
+   dataTable <- read_tsv(inputFile, guess_max = 10000)
    header <- names(dataTable) %>%
       str_replace("_[[0-9]]$", "") %>%
       str_replace_all("[[:space:]]",".") %>%
@@ -49,6 +46,8 @@ readProspectorXLOutput <- function(inputFile, minPepLen = 3, minPepScore = 0, mi
    if (!"distance" %in% names(dataTable)) {
       dataTable$distance <- NA_real_
    }
+   dataTable <- dataTable %>% mutate(Protein.1 = if_else(is.na(Protein.1), Acc.1, Protein.1),
+                                     Protein.2 = if_else(is.na(Protein.2), Acc.2, Protein.2))
    dataTable <- calculateDecoys(dataTable)
    dataTable <- assignXLinkClass(dataTable)
    dataTable <- calculatePercentMatched(dataTable)
@@ -57,7 +56,11 @@ readProspectorXLOutput <- function(inputFile, minPepLen = 3, minPepScore = 0, mi
    dataTable <- scoreFilter(dataTable, minScore = minPepScore)
    dataTable <- dataTable %>% filter(Score.Diff >= minScoreDiff)
    dataTable <- calculatePairs(dataTable)
-   return(dataTable)
+   if ("numProdIons.1" %in% names(dataTable) & "numProdIons.1" %in% names(dataTable)) {
+      dataTable <- productIonFilter(dataTable, minProducts.1 = minIons, minProducts.2 = minIons) }
+  dataTable <- dataTable %>%
+    filter(xlinkedResPair != "0.decoy::0.decoy")
+  return(dataTable)
 }
 
 parsePDB <- function(pdbID=NA, pdbFileDir=getwd()) {
@@ -295,10 +298,10 @@ assignModules <- function(datTab, moduleFile) {
                                       function(XLink.AA.1, first.AA, last.AA) 
                                           dplyr::between(XLink.AA.1, first.AA, last.AA))
         )) %>% 
-        filter(keepEntry | is.na(keepEntry)) %>%
-        group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
-        add_count(name="redundance") %>%
-        filter(redundance == 1 | (redundance > 1 & keepEntry)) %>%
+      filter(keepEntry | is.na(keepEntry)) %>%
+      group_by(Fraction, MSMS.Info, xlinkedResPair) %>%
+      add_count(name="redundance") %>%
+      filter(redundance == 1 | (redundance > 1 & keepEntry)) %>%
         ungroup() %>%
         select(-first.AA, -last.AA, -keepEntry, -Protein.name, -redundance) %>%
         left_join(moduleFile, by=c("Acc.2"="Acc"), suffix=c(".1", ".2")) %>%
@@ -320,8 +323,8 @@ assignModules <- function(datTab, moduleFile) {
                Module.1 = factor(Module.1, levels = mods),
                Module.2 = factor(Module.2, levels = mods),
                Acc.1 = factor(Acc.1, levels = accs),
-               Acc.2 = factor(Acc.2, levels = accs)) %>%
-        add_count(xlinkedModulPair, name="numMPSM")
+               Acc.2 = factor(Acc.2, levels = accs)) #%>%
+    #         add_count(xlinkedModulPair, name="numMPSM")
     if (sum(str_detect(names(datTab.target), "PDB.code")) > 0) {
         datTab.target <- datTab.target %>%
             mutate(PDB = ifelse(!is.na(PDB.code.1) & !is.na(PDB.code.2) & PDB.code.1 == PDB.code.2,
@@ -395,16 +398,15 @@ calculatePairs <- function(searchTable){
    searchTable$xlinkedProtPair <- as.factor(searchTable$xlinkedProtPair)
    searchTable$xlinkedPepPair <- as.factor(searchTable$xlinkedPepPair)
    searchTable <- searchTable %>%
-      add_count(xlinkedResPair, name="numCSM") #%>%
-#      add_count(xlinkedProtPair, name="numPPSM")
-uniqueProtCount <- searchTable %>%
-   select(xlinkedProtPair, xlinkedResPair) %>%
-   group_by(xlinkedProtPair, xlinkedResPair) %>%
-   summarize(.groups="drop") %>%
-   group_by(xlinkedProtPair) %>%
-   count(name = "numPPSM") %>%
-   ungroup()
-  searchTable <- left_join(select(searchTable, -any_of("numPPSM")), uniqueProtCount, by="xlinkedProtPair")
+      add_count(xlinkedResPair, name="numCSM")
+   uniqueProtCount <- searchTable %>%
+      select(xlinkedProtPair, xlinkedResPair) %>%
+      group_by(xlinkedProtPair, xlinkedResPair) %>%
+      summarize(.groups="drop") %>%
+      group_by(xlinkedProtPair) %>%
+      add_count(name = "numURP") %>%
+      ungroup()
+   searchTable <- left_join(select(searchTable, -any_of("numURP")), uniqueProtCount, by=c("xlinkedProtPair","xlinkedResPair"))
    if ("Module.1" %in% names(searchTable) & "Module.2" %in% names(searchTable)) {
       searchTable <- searchTable %>%
          mutate(Module.1 = as.character(Module.1),
@@ -417,18 +419,26 @@ uniqueProtCount <- searchTable %>%
          ) %>%
          mutate(xlinkedModulPair = as_factor(xlinkedModulPair),
                 Module.1 = factor(Module.1, levels = mods),
-                Module.2 = factor(Module.2, levels = mods)) %>%
-         add_count(xlinkedModulPair, name="numMPSM")
+                Module.2 = factor(Module.2, levels = mods)) #%>%
+      #         add_count(xlinkedModulPair, name="numMPSM")
    }
+   if ("MSMS.Ions.1" %in% names(searchTable) & "MSMS.Ions.2" %in% names(searchTable)) {
+      searchTable <- calculateProductIons(searchTable)
+   } 
    return(searchTable)
 }
 
-countSMs <- function(searchTable) {
-    searchTable <- searchTable %>% add_count(xlinkedResPair, name="numCSM")
-    searchTable <- searchTable %>% add_count(xlinkedProtPair, name="numPPSM")
-    if ("xlinkedModulPair" %in% names(searchTable)) {
-        searchTable <- searchTable %>% add_count(xlinkedModulPair, name="numMPSM")
-    }
+addXlinkCount <- function(searchTable) {
+   searchTable <- searchTable %>%
+      add_count(xlinkedResPair, name="numCSM")
+   uniqueProtCount <- searchTable %>%
+      select(xlinkedProtPair, xlinkedResPair) %>%
+      group_by(xlinkedProtPair, xlinkedResPair) %>%
+      summarize(.groups="drop") %>%
+      group_by(xlinkedProtPair) %>%
+      count(name = "numURP") %>%
+      ungroup()
+   searchTable <- left_join(select(searchTable, -any_of("numURP")), uniqueProtCount, by="xlinkedProtPair")
 }
 
 assignXLinkClass <- function(searchTable) {
@@ -486,15 +496,22 @@ getDiagnosticMatches <- function(msms.ions, msms.int) {
    diagnostics <- list(ion_a, int_a, ion_s, int_s)
 }
 
-calculateDiagnosticPairs <- function(datTab) {
+calculateDiagnosticPairs <- function(datTab, int.thresh = 0.05) {
    datTab <- datTab %>%
       mutate(diagnostics.1 = map2(MSMS.Ions.1, MSMS.Intensities.1, getDiagnosticMatches),
              diagnostics.2 = map2(MSMS.Ions.2, MSMS.Intensities.2, getDiagnosticMatches),
              aaPair = map2_lgl(diagnostics.1, diagnostics.2, function(x, y) {
-                if_else(x[[2]] > 0.01 & y[[2]] > 0.01, T, F)}),
+                if_else(x[[2]] > int.thresh & y[[2]] > int.thresh, T, F)}),
              ttPair = map2_lgl(diagnostics.1, diagnostics.2, function(x, y) {
-                if_else(x[[4]] > 0.01 & y[[4]] > 0.01, T, F)}),
-             diagnosticPair = if_else(aaPair | ttPair, T, F)
+                if_else(x[[4]] > int.thresh & y[[4]] > int.thresh, T, F)}),
+             atPair = map2_lgl(diagnostics.1, diagnostics.2, function(x, y) {
+                if_else(x[[2]] > int.thresh & y[[4]] > int.thresh, T, F)}),
+             taPair = map2_lgl(diagnostics.1, diagnostics.2, function(x, y) {
+                if_else(x[[4]] > int.thresh & y[[2]] > int.thresh, T, F)})
+      )
+   datTab <- datTab %>%
+      mutate(diagnosticPair = pmap_lgl(list(datTab$aaPair,datTab$ttPair,datTab$taPair,datTab$atPair),
+                                       function(a,b,c,d) sum(a,b,c,d, na.rm=T) >= 1)
       )
 }
 
@@ -537,6 +554,34 @@ calculateDiagnosticPairsETD <- function(datTab) {
       )
 }
 
+getProductIonMatches <- function(msms.ions, pep.len) {
+   # will break if pep.len > 99
+   ions <- unlist(str_split(msms.ions, ";"))
+   n_indicies <- str_extract_all(ions, "(?<=^(b|c).?)[[0-9]]{1,2}(?=($|\\())") %>% 
+      unlist %>% 
+      unique %>% 
+      as.numeric
+   c_indicies <- str_extract_all(ions, "(?<=^(y|z).?)[[0-9]]{1,2}(?=($|\\())") %>% 
+      unlist %>% 
+      unique %>% 
+      as.numeric
+   c_indicies <- pep.len - c_indicies %>%
+      sort
+   ion_indicies <- union(n_indicies, c_indicies) %>% sort
+   return(ion_indicies)
+}
+
+calculateProductIons <- function(datTab) {
+   datTab <- datTab %>%
+      mutate(numProdIons.1 = map2_int(MSMS.Ions.1, Len.Pep.1, function(x,y) length(getProductIonMatches(x,y))),
+             numProdIons.2 = map2_int(MSMS.Ions.2, Len.Pep.2, function(x,y) length(getProductIonMatches(x,y))))
+   }
+
+productIonFilter <- function(datTab, minProducts.1 = 3, minProducts.2 = 3) {
+   datTab <- datTab %>%
+      filter(numProdIons.1 >= minProducts.1, numProdIons.2 >= minProducts.2)
+}
+
 lengthFilter <- function(searchTable, minLen, maxLen) {
     searchTable <- searchTable[searchTable$Len.Pep.2 >= minLen & searchTable$Len.Pep.1 >= minLen,]
     searchTable <- searchTable[searchTable$Len.Pep.2 <= maxLen & searchTable$Len.Pep.1 <= maxLen,]
@@ -557,15 +602,93 @@ calculateDecoyFractions <- function(datTab, scalingFactor=10) {
     ftTT <- (fdrTable[["Decoy"]] / scalingFactor) - 
         (2 * fdrTable[["DoubleDecoy"]] / (scalingFactor ** 2))
     TT <- fdrTable[["Target"]]
+    if (ftTT < 0) {
+       ffTT <- 0.5 * fdrTable[["Decoy"]] / scalingFactor
+       ftTT <- 0
+    }
     return(c("TT"=TT, "ftTT"=ftTT, "ffTT"=ffTT))
 }
 
-calculateFDR <- function(datTab, threshold=-100, classifier="SVM.score", scalingFactor=10) {
-    datTab <- datTab[datTab[[classifier]] >= threshold, ]
+generateDecoyTable <- function(datTab, targetER=0.01, scalingFactor = 10, classifier=SVM.score) {
+   #Note, only really tested with SVM.score. Use generateErrorTable if having issues with other classifiers.
+   class = datTab %>% pull({{ classifier }})
+   class.min = floor(min(class))
+   class.max = ceiling(max(class))
+   range.spacing <- abs(class.max - class.min) / 500
+   class.range <- seq(class.min, class.max-range.spacing, by=range.spacing)
+   decTable <- class.range %>% map_dfr(function(x) {
+      datTab <- datTab %>% filter({{ classifier }} >= x, xlinkClass=="interProtein")
+      numDecs <- calculateDecoyFractions(datTab, scalingFactor = scalingFactor)
+      tibble(thresh = x, TT = numDecs["TT"], ftTT = numDecs["ftTT"], ffTT = numDecs["ffTT"])
+   })
+   decTable <- decTable %>%
+      mutate(numIncorrect = ftTT + ffTT,
+             fdr.exp = if_else(TT == 0, 0, numIncorrect / TT)
+      )
+   first0 <- which(decTable$fdr.exp < 0 & lag(decTable$fdr.exp) >= 0)
+   if (length(first0) == 0) {
+      first0 = nrow(decTable)
+   } else {
+      first0 <- first0[1]
+   }
+   minFDR <- decTable %>% slice(first0) %>% pull(fdr.exp)
+   maxFDR <- max(decTable$fdr.exp[1:first0], na.rm=T)
+   medFDR.post <- 0
+   sdFDR.post <- 0.01 * abs(maxFDR - minFDR) / maxFDR
+   decTable <- decTable %>%
+      mutate(fdr.orig = fdr.exp,
+             delta.fdr = abs(fdr.exp - lag(fdr.exp)),
+             delta.roll = data.table::frollmean(delta.fdr, 10)
+      )
+   medDroll <- decTable %>% pull(delta.roll) %>% median(na.rm=T)
+   decTable.problems <- which(decTable$delta.roll > medDroll)
+   decTable.negs <- which(decTable$fdr.exp < 0)
+   decTable.problems <- union(decTable.problems, decTable.negs) %>% sort
+   decTable.problems <- decTable.problems[which(decTable.problems > first0)]
+   decTable[decTable.problems, "fdr.exp"] <- rnorm(length(decTable.problems), medFDR.post, sdFDR.post)
+   firstGuess <- which.min(abs(decTable$fdr.exp[1:first0] - targetER))
+   decTable <- decTable %>% mutate(fdr.weights = case_when(
+      abs(fdr.exp - targetER)/maxFDR < 0.1 ~ 5000,
+      abs(fdr.exp - targetER)/maxFDR < 0.25 ~ 500,
+      abs(fdr.exp - targetER)/maxFDR < 0.5 ~ 5,
+      TRUE ~ 0.5))
+   decTable.tailfit <- nlsLM(fdr.exp ~ I(maxFDR * A / (A + C**thresh)),
+                      data=decTable,
+                      start=list(A=1, C = exp(1)),
+                      lower=c("A"=0, "C"=1),
+                      weights=decTable$fdr.weights,
+                      control=list(maxiter=100))
+   decTable <- decTable %>%
+      mutate(
+         fdr = maxFDR*coef(decTable.tailfit)["A"] /
+            (coef(decTable.tailfit)["A"] + coef(decTable.tailfit)["C"]**thresh),
+      )
+   decTable.plot <- decTable %>%
+      ggplot(aes(x=thresh)) +
+      geom_line(aes(y=fdr.orig), color="green", linewidth=1.5) +
+      geom_line(aes(y=fdr.exp), color="violet", linewidth=1.5) +
+      geom_line(aes(y=fdr), color="purple", linewidth=1.5) +
+      theme_bw() + xlim(c(-4,4)) +
+      geom_vline(xintercept = decTable$thresh[firstGuess], color="red", linetype="dashed") +
+      geom_hline(yintercept = 0.01, color="red", linetype="dashed")
+   plot(decTable.plot)
+   return(decTable)
+}
+
+calculateFDR <- function(datTab, threshold=list(intraThresh=-100,interThresh=-100), classifier="SVM.score", scalingFactor=10) {
+    datTab <- classifySeparateThresholds(datTab, separateThresh=threshold, classifier=classifier)
     decoyFractions <- calculateDecoyFractions(datTab, scalingFactor)
     fdr <- (decoyFractions["ffTT"] + decoyFractions["ftTT"]) / decoyFractions["TT"]
     names(fdr) <- NULL
     return(fdr)
+}
+
+calculateFDR.old <- function(datTab, threshold=-100, classifier="SVM.score", scalingFactor=10) {
+   datTab <- datTab[datTab[classifier] >= threshold,]
+   decoyFractions <- calculateDecoyFractions(datTab, scalingFactor)
+   fdr <- (decoyFractions["ffTT"] + decoyFractions["ftTT"]) / decoyFractions["TT"]
+   names(fdr) <- NULL
+   return(fdr)
 }
 
 calculateSeparateFDRs <- function(datTab, thresholdIntra = -100, thresholdInter = -100, 
@@ -610,7 +733,7 @@ violationRate <- function(datTab, threshold, classifier="Score.Diff", maxDistanc
 
 generateErrorTable <- function(datTab,
                                classifier="SVM.score",
-                               errorFUN=calculateFDR,
+                               errorFUN=calculateFDR.old,
                                ...,
                                class.min = NA,
                                class.max = NA) {
@@ -633,27 +756,16 @@ generateErrorTable <- function(datTab,
    return(num.hits)
 }
 
-generateErrorTableSeparate <- function(datTab, classifier="SVM.score",
-                                       errorFUN=calculateFDR, ...) {
-    intraHits <- generateErrorTable(filter(datTab, str_detect(xlinkClass, "intraProtein")),
-                                    classifier=classifier, errorFUN=errorFUN, ...)
-    interHits <- generateErrorTable(filter(datTab, str_detect(xlinkClass, "interProtein")),
-                                    classifier=classifier, errorFUN=errorFUN, ...)
-    max.fdr <- mmax(max(intraHits$fdr, interHits$fdr), 0.05)
-    fdr.spacing <- max.fdr / 50
-    fdr.seq <- seq(0, max.fdr, fdr.spacing)
-    
-    fdr.seq %>% map_dfr(function(i) {
-        intra <- intraHits %>% slice(which.min(abs(fdr - i))) %>%
-            pull(intra)
-        inter <- interHits %>% slice(which.min(abs(fdr - i))) %>%
-            pull(inter)
-        tibble(thresh = NA, intra, inter, fdr = i, total = intra + inter)
-    })
+findThresholdModelled <- function(datTab, targetER=0.05, minThreshold=-5, scalingFactor = 10, ...) {
+   num.hits <- generateDecoyTable(datTab, targetER=targetER, scalingFactor = scalingFactor, ...)
+   nearestScore <- which.min(abs(num.hits$fdr - targetER))
+   threshold = num.hits$thresh[nearestScore]
+   modelledFDR = num.hits$fdr[nearestScore]
+   return(list("thresh"=threshold, "correspondingFDR" = modelledFDR))
 }
 
 findThresholdOld <- function(datTab, targetER=0.05, minThreshold=-5,
-                          classifier="SVM.score", errorFUN=calculateFDR, ...) {
+                          classifier="SVM.score", errorFUN=calculateFDR.old, ...) {
     num.hits <- generateErrorTable(datTab, classifier, errorFUN, ...)
     error.rates <- num.hits$fdr
     class.range <- num.hits$thresh
@@ -678,31 +790,45 @@ findThresholdOld <- function(datTab, targetER=0.05, minThreshold=-5,
 }
 
 findThreshold <- function(datTab, targetER=0.05, minThreshold=-5,
-                          classifier="SVM.score", errorFUN=calculateFDR, ...) {
+                          classifier="SVM.score", errorFUN=calculateFDR.old, ...) {
    num.hits <- generateErrorTable(datTab, classifier, errorFUN, ...)
    error.rates <- num.hits$fdr
    class.range <- num.hits$thresh
-   low.index <- which.min(abs(error.rates - 0.25))
-   low.value <- class.range[low.index]
-   high.index <- which.min(abs(error.rates[low.index:length(error.rates)]))
-   high.value <- class.range[low.index + high.index]
-   num.hits <- generateErrorTable(datTab, class.min = low.value, class.max = high.value, 
-                                  classifier = classifier, errorFUN = errorFUN, ...)
-   error.rates <- num.hits$fdr
-   class.range <- num.hits$thresh
+   if (max(error.rates, na.rm=T) < targetER) {
+      threshold = class.range[1]
+   } else if (targetER < 0.15) {
+      low.index <- which.min(abs(error.rates - 0.25))
+      low.value <- class.range[low.index]
+      high.index <- which.min(abs(error.rates[low.index:length(error.rates)]))
+      high.value <- class.range[low.index + high.index]
+      num.hits <- generateErrorTable(datTab, class.min = low.value, class.max = high.value, 
+                                     classifier = classifier, errorFUN = errorFUN, ...)
+      error.rates <- num.hits$fdr
+      class.range <- num.hits$thresh
+   }
    threshold = class.range[which.min(abs(error.rates - targetER))]
    return(list("globalThresh"=threshold, "correspondingFDR" = errorFUN(datTab, threshold, classifier, ...)))
 }
 
-findSeparateThresholds <- function(datTab, targetER=0.05, minThreshold=-5,
-                                   classifier="SVM.score", errorFUN=calculateFDR, ...) {
+findSeparateThresholds <- function(datTab, targetER=0.01, minThreshold=-5,
+                                   classifier="SVM.score", errorFUN=calculateFDR.old, ...) {
     interTab <- datTab %>% 
-        filter(str_detect(xlinkClass, "inter"))
+        filter(xlinkClass=="interProtein")
     interThresh <- findThreshold(interTab, targetER, minThreshold, classifier, errorFUN, ...)[[1]]
     intraTab <- datTab %>% 
-        filter(str_detect(xlinkClass, "intra"))
+        filter(xlinkClass=="intraProtein")
     intraThresh <- findThreshold(intraTab, targetER, minThreshold, classifier, errorFUN, ...)[[1]]
     return(list("intraThresh"=intraThresh, "interThresh"=interThresh))
+}
+
+findSeparateThresholdsModelled <- function(datTab, targetER=0.01, minThreshold=-5, scalingFactor=10) {
+   interTab <- datTab %>% 
+      filter(xlinkClass=="interProtein")
+   intraTab <- datTab %>% 
+      filter(xlinkClass=="intraProtein")
+   interThresh <- findThresholdModelled(interTab, targetER, minThreshold, scalingFactor=scalingFactor)[[1]]
+   intraThresh <- findThreshold(intraTab, targetER, minThreshold, classifier="SVM.score", scalingFactor=scalingFactor)[[1]]
+   return(list("intraThresh"=intraThresh, "interThresh"=interThresh))
 }
 
 calculateSeparateHits <- function(datTab, thresholds = c("intraThresh"=-100, "interThresh"=-100), classifier="SVM.score") {
@@ -711,6 +837,23 @@ calculateSeparateHits <- function(datTab, thresholds = c("intraThresh"=-100, "in
     datTab.inter <- datTab[datTab[[classifier]] >= thresholds["interThresh"], ]
     inter <- sum(str_count(datTab.inter$xlinkClass, "interProtein"))
     return(tibble("thresh"=thresholds["interThresh"], "intra"=intra, "inter"=inter))
+}
+
+classifySingleThresholds <- function(datTab, singleThresh, classifier = "SVM.score") {
+  datTab <- datTab %>% 
+    filter(!!rlang::sym(classifier) >= singleThresh$globalThresh)
+#  datTab <- addXlinkCount(datTab)
+  return(datTab)
+}
+
+classifySeparateThresholds <- function(datTab, separateThresh, classifier = "SVM.score") {
+   datTab <- datTab %>%
+    filter(
+      (xlinkClass == "interProtein" & !!rlang::sym(classifier) >= separateThresh$interThresh) |
+        (xlinkClass == "intraProtein" & !!rlang::sym(classifier) >= separateThresh$intraThresh)
+    )
+#  datTab <- addXlinkCount(datTab)
+  return(datTab)
 }
 
 removeDecoys <- function(datTab) {
@@ -740,26 +883,14 @@ renumberProtein <-function(dt, protein, shift) {
         dt[dt$Acc.1==protein,"XLink.AA.1"] + shift
     dt[dt$Acc.2==protein,"XLink.AA.2"] <-
         dt[dt$Acc.2==protein,"XLink.AA.2"] + shift
+    # this needs updating: not used very much
     # dt <- assignModules(dt, modulFile)
-    # dt <- calculatePairs(dt)
+    dt <- calculatePairs(dt)
     # if (is.data.frame(object@caTracedPDB)) {
     #     dt <- measureDistances(dt,object@caTracedPDB,object@chainMap)
     # }
     return(dt)
 }
-
-# setGeneric("pairPlot", function(object, color="lightseagreen",
-#                                 removeMods=NA_character_, displayEmpty=T) {
-#     standardGeneric("pairPlot")
-# }
-# )
-# 
-# setMethod("pairPlot", "PPsearchCompareXL",
-#           function(object, color, removeMods, displayEmpty){
-#               .pairPlot(object@dataTable, object@modulFile, color, 
-#                         removeMods, displayEmpty)
-#           }
-# )
 
 .rejiggerMods <- function(modTab) {
     #modTab <- lapply(modTab, function(x) x[-nrow(x),])
@@ -882,39 +1013,156 @@ buildClassifier <- function(datTab, params=params.best, scoreName="SVM.score") {
     return(datTab)
 }
 
-buildClassifierMS3 <- function(datTab) {
-    datTab$massError <- abs(datTab$ppm)
-    if (nrow(datTab) > 30000) {
-        sampleNo <- 15000
+buildClassifier2 <- function(datTab, params=params.best, preFilterER = 0.40,
+                             scoreName="SVM.score", scalingFactor = 10,
+                             sampleNo = 20000) {
+  datTab$massError <- abs(datTab$ppm - mean(datTab$ppm))
+  baseFDR <- calculateFDR(datTab, classifier = "Score.Diff", scalingFactor = scalingFactor)
+  if (!is.na(preFilterER) & baseFDR > preFilterER) {
+    if (nrow(datTab) > sampleNo) {
+      datTab.pre <- slice(datTab, sample(nrow(datTab), sampleNo))
     } else {
-        sampleNo <- nrow(datTab)/2
+      datTab.pre <- datTab
     }
-    ind <- sample(nrow(datTab),sampleNo)
-    train <- datTab[ind,]
-    test <- datTab[-1 * ind,]
-    params <- c("Sc.2","z","Sc.1","numCSM","massError")
-    wghts <- numeric(0)
-    wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
-    wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
-    fit <- svm(train$Decoy2 ~., 
-               subset(train, select=params),
+    preFilter.thresh <- findThresholdOld(datTab.pre, 
+                                       targetER = preFilterER, 
+                                       classifier = "Score.Diff",
+                                       scalingFactor = scalingFactor)
+    datTab <- datTab %>% filter(Score.Diff >= preFilter.thresh$globalThresh)
+  }
+  num.rows <- nrow(datTab)
+  if ((num.rows) < 40000L) {
+    sampleNo <- num.rows %/% 2 
+  } else {
+    sampleNo <- 20000L
+  }
+  ind.1 <- sample(1:num.rows, sampleNo)
+  ind.2 <- sample(c(1:num.rows)[-1*ind.1], sampleNo)
+  train.1 <- datTab[ind.1,]
+  train.2 <- datTab[ind.2,]
+  test.1 <- datTab[-1 * ind.1,]
+  test.2 <- datTab[-1 * ind.2,]
+  wghts.1 <- numeric(0)
+  wghts.2 <- numeric(0)
+  wghts.1["Target"] <- table(test.1$Decoy2)[1] / sum(table(test.1$Decoy2),na.rm=T)
+  wghts.1["Decoy"] <- table(test.1$Decoy2)[2] / sum(table(test.1$Decoy2),na.rm=T)
+  wghts.2["Target"] <- table(test.2$Decoy2)[1] / sum(table(test.2$Decoy2),na.rm=T)
+  wghts.2["Decoy"] <- table(test.2$Decoy2)[2] / sum(table(test.2$Decoy2),na.rm=T)
+  fit.1 <- svm(train.1$Decoy2 ~., 
+               subset(train.1, select=params),
                kernel="linear",
                cost=0.01,
                tolerance=0.01,
-               class.weights=wghts
-    )
-    p <- predict(fit, subset(datTab,select=params),decision.values=T)
-    datTab$SVM.score <- as.numeric(attr(p,"decision.values"))
-    print(paste("training weights:", round(wghts,2)))
-    tab <- table(datTab$Decoy2, datTab$SVM.score > 0)
-    # if (tab[1] < tab[3]) {
-    #     datTab$SVM.score <- -1 * datTab$SVM.score
-    #     tab <- table(datTab$Decoy2, datTab$SVM.score > 0)
-    # }
-    print(tab)
-    print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
-    return(datTab)
+               class.weights=wghts.1
+  )
+  fit.2 <- svm(train.2$Decoy2 ~., 
+               subset(train.2, select=params),
+               kernel="linear",
+               cost=0.01,
+               tolerance=0.01,
+               class.weights=wghts.2
+  )
+  p.1 <- predict(fit.1, subset(datTab, select=params),decision.values=T)
+  p.2 <- predict(fit.2, subset(datTab, select=params),decision.values=T)
+  datTab$score.1 = as.numeric(attr(p.1, "decision.values"))
+  datTab$score.2 = as.numeric(attr(p.2, "decision.values"))
+  if (cor(datTab$Score.Diff, datTab$score.1) < 0) {datTab$score.1 <- -1 * datTab$score.1}
+  if (cor(datTab$Score.Diff, datTab$score.2) < 0) {datTab$score.2 <- -1 * datTab$score.2}
+  datTab[ind.1, "score.1"] <- NA
+  datTab[ind.2, "score.2"] <- NA
+  datTab[[scoreName]] <- map2_dbl(datTab$score.1, datTab$score.2, function(x, y) mean(c(x, y), na.rm=T))
+  tab <- table(datTab$Decoy2, datTab[[scoreName]] > 0)
+  print(tab)
+  print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
+  return(datTab)
 }
+
+trainClassifier <- function(datTab, params=NA, scoreName="SVM.score", 
+                            scalingFactor = 10, targetER = 0.01, 
+                            preFilterER.values = c(0.45, 0.35, 0.25)) {
+   datTab <- ungroup(datTab)
+   # feature selection
+   plausibleHits <- datTab %>% 
+      filter(Decoy == "Target", Score.Diff > 10, numCSM > 1, xlinkClass == "intraProtein") %>% 
+      group_by(Acc.1) %>% 
+      count %>%
+      arrange(desc(n))
+   if (is.na(params)) {
+      params <- case_when(
+         nrow(plausibleHits) <= 1 ~ list(params.best.nop),
+         plausibleHits$n[1] > 100 * plausibleHits$n[2] ~ list(params.best.nop),
+         TRUE ~ list(params.best)
+      ) %>% unlist()
+   }
+   # test model at different pre-filter error rates:
+   baseFDR <- calculateFDR(datTab, classifier = "Score.Diff", scalingFactor = scalingFactor)
+   preFilterER.values <- c(baseFDR, preFilterER.values[baseFDR > preFilterER.values])
+   resultsList <- preFilterER.values %>% 
+      future_map(function(x) buildClassifier2(datTab=datTab, params=params, 
+                                              scoreName=scoreName, scalingFactor=scalingFactor,
+                                              preFilterER = x),
+                 .progress = T, .options = furrr_options(seed = T)
+      )
+   resultsProts <- resultsList %>% 
+      future_map(bestProtPair)
+   thresholds <- future_map(resultsProts, function(dataTable)
+      findSeparateThresholdsModelled(dataTable, targetER = targetER, 
+                             scalingFactor = scalingFactor),
+      .progress=T, .options = furrr_options(seed = T))
+   classifiedList <- map2(resultsProts, thresholds, function(dataTable, thresh)
+      classifySeparateThresholds(dataTable, separateThresh = thresh))
+   numInterHits <- map_dbl(classifiedList, function(classedTable)
+      classedTable %>%
+         filter(Decoy == "Target", xlinkClass == "interProtein") %>% 
+         count %>% pull)
+   bestPreFilter <- which.max(numInterHits)
+   scoreThreshold.csm <- findSeparateThresholdsModelled(resultsList[[bestPreFilter]],
+                                                targetER = targetER,
+                                                scalingFactor = scalingFactor)
+   return(list(
+      "params" = params,
+      "preFilterER.best" = preFilterER.values[[bestPreFilter]],
+      "preFilter.SD.min" = min(resultsList[[bestPreFilter]]$Score.Diff, na.rm=T),
+      "dataTable" = resultsList[[bestPreFilter]],
+      "scoreThreshold" = scoreThreshold.csm,
+      "preFilterERs.all" = preFilterER.values,
+      "numInterHits.all" = numInterHits
+   ))
+}
+
+# buildClassifierMS3 <- function(datTab) {
+#     datTab$massError <- abs(datTab$ppm)
+#     if (nrow(datTab) > 30000) {
+#         sampleNo <- 15000
+#     } else {
+#         sampleNo <- nrow(datTab)/2
+#     }
+#     ind <- sample(nrow(datTab),sampleNo)
+#     train <- datTab[ind,]
+#     test <- datTab[-1 * ind,]
+#     params <- c("Sc.2","z","Sc.1","numCSM","massError")
+#     wghts <- numeric(0)
+#     wghts["Target"] <- table(test$Decoy2)[1] / sum(table(test$Decoy2),na.rm=T)
+#     wghts["Decoy"] <- table(test$Decoy2)[2] / sum(table(test$Decoy2),na.rm=T)
+#     fit <- svm(train$Decoy2 ~., 
+#                subset(train, select=params),
+#                kernel="linear",
+#                cost=0.01,
+#                tolerance=0.01,
+#                class.weights=wghts
+#     )
+#     p <- predict(fit, subset(datTab,select=params),decision.values=T)
+#     datTab$SVM.score <- as.numeric(attr(p,"decision.values"))
+#     print(paste("training weights:", round(wghts,2)))
+#     tab <- table(datTab$Decoy2, datTab$SVM.score > 0)
+#     # if (tab[1] < tab[3]) {
+#     #     datTab$SVM.score <- -1 * datTab$SVM.score
+#     #     tab <- table(datTab$Decoy2, datTab$SVM.score > 0)
+#     # }
+#     print(tab)
+#     print(paste("specificity:", round(tab[1]/(tab[1]+tab[3]),2)))
+#     return(datTab)
+# }
 
 generateMSViewerLink <- function(path, fraction, z, peptide.1, peptide.2, spectrum, 
                                  instrumentType = NA, linkType = NA, outputType = "HTML") {
@@ -1090,7 +1338,7 @@ longestBackboneIonSeries <- function(ms.product.info) {
     })
 }
 
-formatXLTable <- function(datTab) {
+formatXLTable <- function(datTab, msviewer=F) {
     annoyingColumns <- str_which(names(datTab), "(Int|Dec)[a-z]{2}\\.[[1-2]]")
     if (length(annoyingColumns) > 0) {
        datTab <- datTab[, -annoyingColumns]
@@ -1114,7 +1362,7 @@ formatXLTable <- function(datTab) {
         "XLink.AA.1", "Protein.1", "Module.1", "Species.1",
         "Acc.2", "XLink.AA.2", "Protein.2", "Module.2", "Species.2",
         "xlinkClass", "Len.Pep.1", "Len.Pep.2",
-        "Peptide.1", "Peptide.2", "numCSM", "numPPSM", "numMPSM",
+        "Peptide.1", "Peptide.2", "numCSM", "numURP",
         "Fraction", "RT", "MSMS.Info", "id", "experiment")
     ))
     if ("Protein.1" %in% names(datTab) & "Protein.2" %in% names(datTab)) {
@@ -1160,11 +1408,14 @@ formatXLTable <- function(datTab) {
     }
     if ("MSMS.Info" %in% names(datTab)) {
         datTab <- datTab %>% mutate(MSMS.Info = as.integer(MSMS.Info))
+        if (msviewer) {datTab <- rename(datTab, `MSMS Info` = MSMS.Info)}
     }
     if ("SVM.score" %in% names(datTab)) {
         datTab <- datTab %>% mutate(SVM.score = round(SVM.score, 2))
     }
-    datTab <- datTab %>% mutate(xlinkedResPair = fct_drop(xlinkedResPair))
+    if (msviewer) {datTab <- rename(datTab, `Peptide 1` = Peptide.1, `Peptide 2` = Peptide.2, )}
+    datTab <- datTab %>% mutate(xlinkedResPair = fct_drop(xlinkedResPair)) %>%
+       rename(`MSMS Info` = "MSMS.Info", `Peptide 1` = "Peptide.1", `Peptide 2` = "Peptide.2") %>%
     return(datTab)
 }
 
@@ -1513,155 +1764,128 @@ flattenMS3pair <- function(ms3CSM1, ms3CSM2, fraction, masterScanNo=NA,
     return(flatCSM)
 }
 
-
-
-# processMS2xlinkResultsBoosted <- function(ms2searchResults, ms3searchTable, dev=F) {
-#     #ms2search results are the S04 object and they should not be processed beyond CSMs ideally.
-#     #ms3searchTable is the tsv d by running readMS3results
-#     
-#     datTab <- ms2searchResults@dataTable
-#     ms2rescue <- left_join(datTab, ms3searchTable, by=c("MSMS.Info"="ms2etdScanNo"))
-#     ms2rescue$outcome <- NA
-#     ms2rescue$outcome[ms2rescue$DB.Peptide.1 == ms2rescue$`DB.Peptide.ms3`] <- "agree Pep1"
-#     ms2rescue$outcome[ms2rescue$DB.Peptide.2 == ms2rescue$`DB.Peptide.ms3`] <- "agree Pep2"
-#     ms2rescue$outcome[!is.na(ms2rescue$`DB.Peptide.ms3`) &
-#                           ms2rescue$`DB.Peptide.ms3`!= ms2rescue$DB.Peptide.1 &
-#                           ms2rescue$`DB.Peptide.ms3`!= ms2rescue$DB.Peptide.2] <- "disagree"
-#     print(table(ms2rescue$outcome))
-#     if (dev) {return(ms2rescue)}
-#     datTab <- left_join(datTab,
-#                         ms2rescue[which(ms2rescue$outcome=="agree Pep2"),
-#                                   c("MSMS.Info","DB.Peptide.ms3", "Peptide.ms3", 
-#                                     "Protein.Mods.ms3", "Fraction.ms3", "RT.ms3", 
-#                                     "Spectrum.ms3", "ms3ScanNo", "Score.ms3", "Expect.ms3", 
-#                                     "ms2cidScanNo", "pepmass.ms3", "charge.ms3", 
-#                                     "precMass.ms3")],
-#                         by="MSMS.Info")
-#     datTab[is.na(datTab$ms3ScanNo), "Expect.ms3"] <- 1
-#     datTab <- datTab %>% mutate(Score.Diff.Boosted = Score.Diff + -log(Expect.ms3))
-#     ms2searchResults@dataTable <- datTab
-#     return(ms2searchResults)
-# }
-# 
-
-fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="SVM.score",
-                     minValue = floor(min(datTab[[classifier]], na.rm = T)),
-                     maxValue = ceiling(max(datTab[[classifier]], na.rm = T)),
-                     addLegend = T,
-                     title = "FDR plot",
-                     xlabel = "SVM Score") {
-    datTab <- as.data.frame(datTab)
-    stepSize = mmax((maxValue - minValue) / 50, 0.25)
-    decoyHist <- hist(datTab[datTab$Decoy=="Decoy", classifier], 
-                      breaks=seq(minValue, maxValue, by=stepSize), 
-                      plot=F)
-    TD <- decoyHist$counts
-    doubleDecoyHist <- hist(datTab[datTab$Decoy=="DoubleDecoy", classifier], 
-                            breaks=seq(minValue, maxValue, by=stepSize), 
-                            plot=F)
-    DD <- doubleDecoyHist$counts
-    doubleDecoyHist$counts = DD / (scalingFactor ** 2)
-    decoyHist$counts = (TD /scalingFactor - 2 * DD/ (scalingFactor**2))
-    targetHist <- hist(datTab[datTab$Decoy=="Target", classifier],
-                       breaks=seq(minValue, maxValue, by=stepSize),
-                       plot=F)
-    diffHist <- targetHist
-    diffHist$counts <- targetHist$counts - decoyHist$counts - doubleDecoyHist$counts
-    displayLim =c(minValue,maxValue)
-    plot(targetHist, col="lightblue", xlim=displayLim, 
-         xlab=xlabel, main=NA)
-    if (sum(decoyHist$counts) > sum(doubleDecoyHist$counts)) {
-       plot(decoyHist, add=T, col="salmon")
-       plot(doubleDecoyHist, add=T, col="goldenrod1")
-    } else {
-       plot(doubleDecoyHist, add=T, col="goldenrod1")
-       plot(decoyHist, add=T, col="salmon")
-    }
-    abline(v=cutoff, lwd=2, lt=1, col="red")
-    if (addLegend) {
-        legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
-               fill = c("lightblue", "salmon", "goldenrod1"),
-               bty="n")
-    }
-    title(title, adj=0)
-}    
-
-# assignGroups <- function(datTab, pgroups=peptideGroups) {
-#     datTab$group.A <- map_chr(datTab$DB.Peptide.1, function(x) {
-#         groupMembership <- map_lgl(pgroups, function(group) {
-#             x %in% group
-#         })
-#         if (sum(groupMembership)==0) {
-#             return(NA)
-#         } else if (sum(groupMembership) > 1) {
-#             return(paste(which(groupMembership), collapse="."))
-#         } else {
-#             return(which(groupMembership))
-#         }
-#     })
-#     datTab$group.B <- map_chr(datTab$DB.Peptide.2, function(x) {
-#         groupMembership <- map_lgl(pgroups, function(group) {
-#             x %in% group
-#         })
-#         if (sum(groupMembership)==0) {
-#             return(NA)
-#         } else if (sum(groupMembership) > 1) {
-#             return(paste(which(groupMembership), collapse="."))
-#         } else {
-#             return(which(groupMembership))
-#         }
-#     })
-#     datTab[which(datTab$group.A == "2.10" & datTab$group.B == "2"), "group.A"] <- "2"
-#     datTab[which(datTab$group.B == "2.10" & datTab$group.A == "2"), "group.B"] <- "2"
-#     datTab$group.A[datTab$group.A=="2.10"] <- "10"
-#     datTab$group.B[datTab$group.B=="2.10"] <- "10"
-#     datTab <- datTab %>% mutate(groundTruth=group.A==group.B)
-#     datTab$groundTruth[which(is.na(datTab$groundTruth))] <- FALSE
-#     datTab$crosslink <- ifelse(datTab$DB.Peptide.1 < datTab$DB.Peptide.2,
-#                                paste(datTab$DB.Peptide.1, datTab$DB.Peptide.2, sep=":"),
-#                                paste(datTab$DB.Peptide.2, datTab$DB.Peptide.1, sep=":")
-#     )                                     
-#     return(datTab)
-# }
-
-removeWeirdDeadEnds <- function(datTab) {
-    datTab <- datTab %>% filter(!str_detect(Peptide.1, "Xlink:DSS[[23]]"),
-                                !str_detect(Peptide.2, "Xlink:DSS[[23]]"))
-    return(datTab)
+deScaler <- function(datTab, scalingFactor = 10) {
+   # Function to scale datasets when creating histograms
+   datTab.t <- datTab %>% filter(Decoy == "Target")
+   datTab.d <- datTab %>% filter(Decoy == "Decoy")
+   datTab.dd <- datTab %>% filter(Decoy == "DoubleDecoy")
+   dt.adjustment <- (nrow(datTab.d) / scalingFactor) - 2*(nrow(datTab.dd) / scalingFactor**2)
+   dd.adjustment <- nrow(datTab.dd) / scalingFactor**2
+   if (dt.adjustment < 0) {dt.adjustment <- 0}
+   datTab.d <- datTab.d %>% slice(sample(nrow(datTab.d), dt.adjustment))
+   datTab.dd <- datTab.dd %>% slice(sample(nrow(datTab.dd), dd.adjustment))
+   bind_rows(datTab.t, datTab.d, datTab.dd)
 }
 
-senspe <- function(threshold, datTab, classifier="SVM.score") {
-    datTab <- datTab[datTab$Decoy=="Target",]
-    P <- sum(datTab$groundTruth)
-    N <- sum(!datTab$groundTruth)
-    datTab <- datTab[datTab[[classifier]] >= threshold, ]
-    TP <- sum(datTab$groundTruth)
-    FP <- sum(!datTab$groundTruth)
-    FN <- P-TP
-    TN <- N-FP
-    sensitivity <- TP / P
-    specificity <- TN / N
-    fdr <- FP / P
-    return(data.frame(thresh=threshold, sens=sensitivity, spec=specificity, fdr=fdr))
+fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier=SVM.score,
+                       addLegend = T,
+                       title = "FDR plot",
+                       xlabel = "SVM Score") {
+   datTab <- ungroup(datTab)
+   minValue = datTab %>% pull({{ classifier }}) %>% min(na.rm=T)
+   minValue = floor(minValue)
+   maxValue = datTab %>% pull({{ classifier }}) %>% max(na.rm=T)
+   maxValue = ceiling(maxValue)
+   stepSize = mmax((maxValue - minValue) / 100, 0.25)
+   datTab <- deScaler(datTab, scalingFactor = scalingFactor)
+   decCounts <- datTab %>% tally(Decoy == "Decoy") %>% pull(n)
+   doubleCounts <- datTab %>% tally(Decoy == "DoubleDecoy") %>% pull(n)
+   datTab <- datTab %>%
+      mutate(Decoy = case_when(
+         doubleCounts > decCounts ~ factor(Decoy, levels = c("Target", "DoubleDecoy", "Decoy")),
+         doubleCounts <= decCounts ~ factor(Decoy, levels = c("Target", "Decoy", "DoubleDecoy"))
+         ))
+   fdr.plot <- datTab %>%
+      ggplot(aes(x= {{ classifier }}, fill=Decoy, alpha=xlinkClass)) +
+      geom_histogram(col="black", binwidth = stepSize, position="identity") +
+      geom_vline(xintercept = cutoff, linetype = "dashed", col="red")
+   fdr.plot <- fdr.plot + 
+      theme_bw() +
+      xlim(minValue, maxValue) +
+      scale_fill_manual(values=c("Target" = "lightblue",
+                                 "Decoy" = "salmon",
+                                 "DoubleDecoy" = "goldenrod1")) +
+      scale_alpha_manual(values=c("interProtein" = 0.9, "intraProtein" = 0.4))
+   if (!addLegend) {fdr.plot <- fdr.plot +
+      theme(legend.position = "none") }
+   plot(fdr.plot)
 }
+
+# deprecated function:
+# fdrPlots <- function(datTab, scalingFactor = 10, cutoff = 0, classifier="SVM.score",
+#                      minValue = floor(min(datTab[[classifier]], na.rm = T)),
+#                      maxValue = ceiling(max(datTab[[classifier]], na.rm = T)),
+#                      addLegend = T,
+#                      title = "FDR plot",
+#                      xlabel = "SVM Score") {
+#     datTab <- as.data.frame(datTab)
+#     stepSize = mmax((maxValue - minValue) / 50, 0.25)
+#     decoyHist <- hist(datTab[datTab$Decoy=="Decoy", classifier], 
+#                       breaks=seq(minValue, maxValue, by=stepSize), 
+#                       plot=F)
+#     TD <- decoyHist$counts
+#     doubleDecoyHist <- hist(datTab[datTab$Decoy=="DoubleDecoy", classifier], 
+#                             breaks=seq(minValue, maxValue, by=stepSize), 
+#                             plot=F)
+#     DD <- doubleDecoyHist$counts
+#     doubleDecoyHist$counts = DD / (scalingFactor ** 2)
+#     decoyHist$counts = (TD /scalingFactor - 2 * DD/ (scalingFactor**2))
+#     targetHist <- hist(datTab[datTab$Decoy=="Target", classifier],
+#                        breaks=seq(minValue, maxValue, by=stepSize),
+#                        plot=F)
+#     diffHist <- targetHist
+#     diffHist$counts <- targetHist$counts - decoyHist$counts - doubleDecoyHist$counts
+#     displayLim =c(minValue,maxValue)
+#     plot(targetHist, col="lightblue", xlim=displayLim, 
+#          xlab=xlabel, main=NA)
+#     if (sum(decoyHist$counts) > sum(doubleDecoyHist$counts)) {
+#        plot(decoyHist, add=T, col="salmon")
+#        plot(doubleDecoyHist, add=T, col="goldenrod1")
+#     } else {
+#        plot(doubleDecoyHist, add=T, col="goldenrod1")
+#        plot(decoyHist, add=T, col="salmon")
+#     }
+#     abline(v=cutoff, lwd=2, lt=1, col="red")
+#     if (addLegend) {
+#         legend("topright", c("Target", "Decoy", "DoubleDecoy"), 
+#                fill = c("lightblue", "salmon", "goldenrod1"),
+#                bty="n")
+#     }
+#     title(title, adj=0)
+# }    
+
+# senspe <- function(threshold, datTab, classifier="SVM.score") {
+#     datTab <- datTab[datTab$Decoy=="Target",]
+#     P <- sum(datTab$groundTruth)
+#     N <- sum(!datTab$groundTruth)
+#     datTab <- datTab[datTab[[classifier]] >= threshold, ]
+#     TP <- sum(datTab$groundTruth)
+#     FP <- sum(!datTab$groundTruth)
+#     FN <- P-TP
+#     TN <- N-FP
+#     sensitivity <- TP / P
+#     specificity <- TN / N
+#     fdr <- FP / P
+#     return(data.frame(thresh=threshold, sens=sensitivity, spec=specificity, fdr=fdr))
+# }
 
 calculateGroundTruthFDR <- function(datTab) {
     results <- datTab %>% filter(Decoy=="Target") %>%
-        group_by(Fraction, groundTruth) %>% 
-        count() %>% 
+        group_by(Fraction, groundTruth) %>%
+        count() %>%
         pivot_wider(names_from=groundTruth, values_from=n)
     names(results)[which(names(results)=="TRUE")] <- "Correct"
     names(results)[which(names(results)=="FALSE")] <- "Incorrect"
     results[is.na(results)] <- 0
-    results <- results %>% 
+    results <- results %>%
         mutate(FDR = round((100 * Incorrect)/(Incorrect + Correct),2))
-    means <- tibble(Fraction="means:", 
+    means <- tibble(Fraction="means:",
                     Incorrect=mean(results$Incorrect, na.rm=T),
-                    Correct=mean(results$Correct, na.rm=T), 
+                    Correct=mean(results$Correct, na.rm=T),
                     FDR=mean(results$FDR, na.rm=T))
-    sds <- tibble(Fraction="sds:", 
+    sds <- tibble(Fraction="sds:",
                   Incorrect=sd(results$Incorrect, na.rm=T),
-                  Correct=sd(results$Correct, na.rm=T), 
+                  Correct=sd(results$Correct, na.rm=T),
                   FDR=sd(results$FDR, na.rm=T))
     results <- bind_rows(results, means, sds)
     return(results)
@@ -1670,7 +1894,7 @@ calculateGroundTruthFDR <- function(datTab) {
 bestResPair <- function(datTab, classifier=SVM.score){
    quoClass <- enquo(classifier)
    datTab <- datTab %>% 
-      calculatePairs() %>% 
+      #calculatePairs() %>% 
       group_by(xlinkedResPair) %>%
       filter(!! quoClass==max(!! quoClass)) %>%
       slice(1) %>%
@@ -1681,7 +1905,7 @@ bestResPair <- function(datTab, classifier=SVM.score){
 bestPepPair <- function(datTab, classifier=SVM.score){
    quoClass <- enquo(classifier)
    datTab <- datTab %>% 
-      calculatePairs %>% 
+      #calculatePairs %>% 
       group_by(xlinkedPepPair) %>%
       filter(!! quoClass==max(!! quoClass)) %>%
       slice(1) %>%
@@ -1692,7 +1916,7 @@ bestPepPair <- function(datTab, classifier=SVM.score){
 bestProtPair <- function(datTab, classifier=SVM.score){
    quoClass <- enquo(classifier)
    datTab <- datTab %>% 
-      calculatePairs %>% 
+      #calculatePairs %>% 
       group_by(xlinkedProtPair) %>%
       filter(!! quoClass==max(!! quoClass)) %>%
       slice(1) %>%
@@ -1768,7 +1992,7 @@ distancePlot2 <- function(datTab, threshold=35, binWidth=NA) {
         #                binwidth = 2.5, 
         #                col="black", position="stack") + 
         geom_histogram(binwidth = binWidth, col="black", position="stack") +
-        geom_vline(xintercept = threshold, col="red", size=1.25) + 
+        geom_vline(xintercept = threshold, col="red", size=1.25, linestyle="dashed") + 
         facet_grid(rows = "distType") + 
         scale_fill_brewer(palette=4, type="seq", labels=abbreviate) + 
         theme_bw() +
@@ -2100,3 +2324,7 @@ read_cif <- function (file, maxlines = -1, multi = FALSE, rm.insert = FALSE,
 
 environment(read_pdb) <- asNamespace('bio3d')
 environment(read_cif) <- asNamespace('bio3d')
+
+print("touchStone module loaded")
+
+

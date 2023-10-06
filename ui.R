@@ -93,10 +93,10 @@ fluidPage(
                                 uiOutput("svmThreshSliders"),
                                 br(),
                                 sliderInput("scoreDiffThreshold", "Min. Score.Diff", min = 0, max = 30,
-                                            step = 0.5, value = 5),
+                                            step = 0.5, value = 0),
                                 br(),
-                                sliderInput("peptideLengthFilter", "Peptide Length", min = 3, max = 35,
-                                            step = 1, value = c(4, 30))
+                                sliderInput("peptideLengthFilter", "Peptide Length", min = 3, max = 40,
+                                            step = 1, value = c(3, 40))
                          ),
                          column(6,
                                 sliderInput("ms1MassError", "Prec Mass Error", min = -25, max = 25,

@@ -10,8 +10,9 @@ library(jsonlite)
 library(bio3d)
 library(future)
 library(furrr)
-
+library(minpack.lm)
 future::plan(multicore)
+options(future.globals.maxSize = 8000 * 1024^2)
 source("./touchStone.R")
 
 mmax <- function(x, base=5) {
@@ -30,9 +31,9 @@ readParamsFile <- function(paramsFile) {
             }
    )
 }
-
+#SVM score parameters:
 params.default <- c("Score.Diff","z","Score","numCSM","massError", "Rk.2","Rk.1")
-params.best <- c("Score.Diff", "percMatched", "massError", "z", "numPPSM", "numCSM", "xlinkClass")
+params.best <- c("Score.Diff", "percMatched", "massError", "z", "numURP", "numCSM", "xlinkClass")
 params.best.nop <- c("Score.Diff", "percMatched", "massError", "z", "numCSM")
    
 proton <- 1.007276
